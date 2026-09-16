@@ -353,8 +353,8 @@ export const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
   showPhoto: true,
   showStage: true,
   showWeight: true,
-  winnerAnimationEnabled: true,
-  winnerAnimationDurationSeconds: 3,
+  winnerAnimationEnabled: false,
+  winnerAnimationDurationSeconds: 0,
 };
 
 // ===== Call-screen visibility toggles (Admin panel controls what the

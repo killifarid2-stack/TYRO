@@ -48,6 +48,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   selectDisplay: (displayId) => ipcRenderer.invoke('displays:select', displayId),
   getSelectedDisplay: () => ipcRenderer.invoke('displays:get-selected'),
+  preparePublicDisplay: (payload) => ipcRenderer.invoke('public-display:prepare', payload),
+  emergencyPublicDisplay: () => ipcRenderer.invoke('public-display:emergency'),
+  publicDisplayHeartbeat: (payload) => ipcRenderer.send('public-display:heartbeat', payload),
+  onPublicDisplayEmergency: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('public-display:emergency', listener);
+    return () => ipcRenderer.removeListener('public-display:emergency', listener);
+  },
+  getDisplayOverlay: () => ipcRenderer.invoke('display:overlay:get'),
+  setDisplayOverlay: (overlay) => ipcRenderer.invoke('display:overlay:set', overlay),
+  onDisplayOverlayChanged: (callback) => { const listener = (_event, overlay) => callback(overlay); ipcRenderer.on('display:overlay-changed', listener); return () => ipcRenderer.removeListener('display:overlay-changed', listener); },
+  getDisplayCalibration: () => ipcRenderer.invoke('display:calibration:get'),
+  setDisplayCalibration: (calibration) => ipcRenderer.invoke('display:calibration:set', calibration),
 
   // ---- Local Network (Wi-Fi) judge connections (offline, no internet) ----
   getLocalWifiInfo: () => ipcRenderer.invoke('local-wifi:get-info'),

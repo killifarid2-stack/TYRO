@@ -56,13 +56,39 @@ describe('World Taekwondo golden-round rules', () => {
     expect(s.pendingRoundDecision).toBe(true);
   });
 
-  it('ten Gam-jeoms finish an individual match by PUN, not PTG', () => {
+  it('the final Gam-jeom warning slot loses the current round instead of ending the whole match', () => {
     let s:any=createInitialMatchState({ rounds:3, goldenRound:true, gamjeomLimit:10, enforceGamjeomLimit:true });
     s={...s,status:'fighting'};
     for(let i=0;i<10;i++) s=addScore(s,'hong','gamjeom');
-    expect(s.result?.winner).toBe('chung');
-    expect(s.result?.method).toBe('PUN');
-    expect(s.status).toBe('finished');
+    expect(s.result).toBeUndefined();
+    expect(s.status).toBe('rest');
+    expect(s.roundWinners.find((r:any)=>r.round===1)?.winner).toBe('chung');
+    expect(s.roundWinners.find((r:any)=>r.round===1)?.method).toBe('PUN');
+  });
+
+  it('LAST 10s ×2 records one warning and awards exactly two points to the opponent', () => {
+    let s:any=createInitialMatchState({ rounds:3, gamjeomLimit:10, enforceGamjeomLimit:true, last10SecondsGamjeomPoints:2 });
+    s={...s,status:'fighting',timeRemaining:8};
+    s=addScore(s,'hong','gamjeom','operator',undefined,2);
+    expect(s.hong.scores[0].gamjeom).toBe(1);
+    expect(s.chung.scores[0].total).toBe(2);
+    expect(s.events.filter((e:any)=>e.type==='gamjeom' && e.player==='hong')).toHaveLength(1);
+    expect(s.events.find((e:any)=>e.type==='gamjeom' && e.player==='hong')?.points).toBe(2);
+  });
+
+  it('LAST 10s ×2 still fills only one penalty slot and the tenth slot loses the current round', () => {
+    let s:any=createInitialMatchState({ rounds:3, gamjeomLimit:10, enforceGamjeomLimit:true, last10SecondsGamjeomPoints:2 });
+    s={...s,status:'fighting',timeRemaining:8};
+    for (let i=0;i<9;i++) s=addScore(s,'hong','gamjeom','operator',undefined,2);
+    expect(s.hong.scores[0].gamjeom).toBe(9);
+    expect(s.status).toBe('fighting');
+    s=addScore(s,'hong','gamjeom','operator',undefined,2);
+    expect(s.hong.scores[0].gamjeom).toBe(10);
+    expect(s.events.filter((e:any)=>e.type==='gamjeom' && e.player==='hong')).toHaveLength(10);
+    expect(s.events.filter((e:any)=>e.type==='gamjeom' && e.player==='chung')).toHaveLength(0);
+    expect(s.roundWinners.find((r:any)=>r.round===1)?.winner).toBe('chung');
+    expect(s.roundWinners.find((r:any)=>r.round===1)?.method).toBe('PUN');
+    expect(s.result).toBeUndefined();
   });
 
 });

@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useMatch, isPublicDisplayWindow } from '@/context/MatchContext';
 import { formatTime, getCurrentRoundScore, getRotationEntryForRound } from '@/lib/match-engine';
 import { PlayerColor, MATCH_STAGE_LABELS, COMPETITION_MODE_LABELS, DEFAULT_DISPLAY_CONFIG, DEFAULT_CALL_DISPLAY_CONFIG } from '@/types/tkd';
-import { Maximize, Settings as SettingsIcon, QrCode as QrIcon, X, Video, Swords, Scale, User, Trophy, Users, ClipboardCheck, Clock, ShieldCheck, Cpu, Wifi, WifiOff, ArrowRight, Star, AlertTriangle, Palette } from 'lucide-react';
+import { Maximize, Settings as SettingsIcon, QrCode as QrIcon, X, Video, Swords, Scale, User, Trophy, Users, ClipboardCheck, Clock, ShieldCheck, Cpu, Wifi, WifiOff, ArrowRight, Star, AlertTriangle } from 'lucide-react';
 import { supabase, ensureRealtimeSession } from '@/integrations/supabase/client';
 import { loadTournamentLocal, saveTournamentLocal, isLocalTournamentId, getExternalDisplayColors } from '@/lib/tournament-local';
 import { QRCodeSVG } from 'qrcode.react';
@@ -22,8 +22,6 @@ import DoctorCallAnimation from './DoctorCallAnimation';
 import KyeshiCallAnimation from './KyeshiCallAnimation';
 import { formatPlayerName, type NameFormat } from '@/lib/playerName';
 import { ANIMATION_ASSETS } from '@/assets/animations';
-import BroadcastDesignOverlay from './BroadcastDesignOverlay';
-import BroadcastDesignRuntime from './BroadcastDesignRuntime';
 
 /** Player photo with a real fallback to the nationality flag — not just a
  *  blank space — when the photo URL is missing, invalid, or fails to load
@@ -31,10 +29,7 @@ import BroadcastDesignRuntime from './BroadcastDesignRuntime';
  *  hid itself via onError with nothing in its place, even though a flag
  *  should have been shown instead. */
 import type { MatchData } from './individual-result/types';
-// NOTE: IndividualWinnerAnimation (the dedicated match-end cinematic for
-// 1v1 matches) was retired per request — see the currentFrame === 'match_end'
-// branch below, which now falls through to the static Daedo-style result
-// frame instead. The component file itself is left in place, unused.
+import { IndividualWinnerAnimation } from './individual-result/IndividualWinnerAnimation';
 
 function PhotoOrFlag({ photoUrl, nationality, showPhoto, showFlag, size, className }: {
   photoUrl?: string; nationality?: string; showPhoto: boolean; showFlag: boolean;
@@ -64,7 +59,6 @@ import { getBroadcastDisplayMode, getBroadcastDisplayConfig } from '@/lib/broadc
 import { useBroadcastViewport } from '@/lib/broadcast-viewport';
 import appIconUrl from '@/assets/app-icon.png';
 import splashBannerUrl from '@/assets/splash-banner.png';
-import trophyWabTkdUrl from '@/assets/trophy-wab-tkd-transparent.png';
 import medalWabTkdUrl from '@/assets/medal-transparent.png';
 // Real equipment photography for the Hit Statistics panel (spectator screen).
 // Blue = chung, Red = hong — never swapped, never replaced with generic icons.
@@ -292,83 +286,6 @@ function LightParticles({ color }: { color: string }) {
   );
 }
 
-// ===== TROPHY BURST — Par Équipe championship reveal =====
-// Golden trophy rising from the bottom, ringed by expanding energy waves,
-// slowly rotating light rays, rising sparks and two soft lens flares.
-// Shown once, on entrance, behind the WINNER banner for team-match
-// ("Par Équipe") results only — it's the whole squad's championship
-// moment, not a per-player effect.
-function TrophyBurst() {
-  const sparks = useRef(
-    Array.from({ length: 46 }, (_, i) => ({
-      id: i,
-      x: 50 + (Math.random() - 0.5) * 46,
-      delay: Math.random() * 1.8,
-      duration: 1.8 + Math.random() * 1.6,
-      size: 2 + Math.random() * 3,
-      drift: (Math.random() - 0.5) * 60,
-    }))
-  ).current;
-  return (
-    <div className="absolute inset-0 flex items-end justify-center pointer-events-none z-10" style={{ overflow: 'hidden' }}>
-      {/* slowly rotating golden light rays behind the trophy */}
-      <div className="absolute" style={{
-        bottom: '4%', width: '120vmax', height: '120vmax',
-        background: 'repeating-conic-gradient(hsl(45 100% 62% / 0.10) 0deg 4deg, transparent 4deg 14deg)',
-        animation: 'trophyRaysRotate 14s linear infinite',
-        maskImage: 'radial-gradient(circle at 50% 100%, black 0%, transparent 55%)',
-        WebkitMaskImage: 'radial-gradient(circle at 50% 100%, black 0%, transparent 55%)',
-      }} />
-      {/* expanding rings from the trophy base */}
-      {[0, 0.5, 1].map(delay => (
-        <div key={delay} className="absolute rounded-full" style={{
-          bottom: 18, left: '50%', width: 12, height: 12,
-          border: '2px solid hsl(45 93% 65% / 0.6)',
-          animation: `trophyRing 2.2s ease-out ${delay}s infinite`,
-        }} />
-      ))}
-      {/* rising golden sparks */}
-      {sparks.map(s => (
-        <div key={s.id} className="absolute rounded-full" style={{
-          left: `${s.x}%`, bottom: 20, width: s.size, height: s.size,
-          background: 'hsl(45 93% 68%)', boxShadow: '0 0 6px hsl(45 93% 60%)',
-          animation: `trophySpark ${s.duration}s ${s.delay}s ease-out infinite`,
-          // @ts-ignore — custom property read by the keyframes below
-          '--drift': `${s.drift}px`,
-        } as React.CSSProperties} />
-      ))}
-      {/* two soft lens flares drifting near the trophy */}
-      <div className="absolute rounded-full" style={{
-        left: '38%', bottom: '46%', width: 10, height: 10,
-        background: 'hsl(48 100% 92%)', boxShadow: '0 0 24px 8px hsl(48 100% 78% / 0.8)',
-        animation: 'trophyFlareA 4.5s ease-in-out 1.4s infinite',
-      }} />
-      <div className="absolute rounded-full" style={{
-        left: '63%', bottom: '58%', width: 6, height: 6,
-        background: 'hsl(45 100% 90%)', boxShadow: '0 0 18px 6px hsl(45 100% 75% / 0.7)',
-        animation: 'trophyFlareB 5.2s ease-in-out 1.9s infinite',
-      }} />
-      {/* the trophy itself */}
-      <img data-wab-layer-id="winner-trophy" src={trophyWabTkdUrl} alt="" className="relative" style={{
-        width: 150, height: 'auto',
-        filter: 'drop-shadow(0 0 20px hsl(45 100% 85% / 0.7)) drop-shadow(0 0 44px hsl(45 93% 58% / 0.6)) drop-shadow(0 0 84px hsl(45 93% 58% / 0.3))',
-        animation: 'trophyRise 1.1s cubic-bezier(0.2,0.7,0.25,1) both, trophyFloat 3.2s ease-in-out 1.1s infinite',
-      }} />
-      <style>{`
-        @keyframes trophyRise { 0%{ transform: translateY(60%); opacity: 0; } 100%{ transform: translateY(0); opacity: 1; } }
-        @keyframes trophyFloat { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-8px); } }
-        @keyframes trophyRing { 0%{ transform: translate(-50%,50%) scale(0); opacity: 0.9; border-width: 3px; }
-          100%{ transform: translate(-50%,50%) scale(18); opacity: 0; border-width: 1px; } }
-        @keyframes trophySpark { 0%{ transform: translate(0,0) scale(1); opacity: 0; }
-          10%{ opacity: 1; } 100%{ transform: translate(var(--drift), -220px) scale(0.3); opacity: 0; } }
-        @keyframes trophyRaysRotate { 0%{ transform: translateX(-50%) rotate(0deg); } 100%{ transform: translateX(-50%) rotate(360deg); } }
-        @keyframes trophyFlareA { 0%,100%{ opacity: 0; transform: scale(0.6); } 50%{ opacity: 1; transform: scale(1.3); } }
-        @keyframes trophyFlareB { 0%,100%{ opacity: 0; transform: scale(0.6); } 55%{ opacity: 0.9; transform: scale(1.2); } }
-      `}</style>
-    </div>
-  );
-}
-
 // ===== ENTRY FREEZE — brief pre-reveal build-up for Par Équipe endings =====
 // Match freezes → VS mark pulses once → screen darkens, then fades out to
 // hand off to the champion reveal beneath it once winnerScale kicks in.
@@ -402,16 +319,13 @@ function TeamWinnerScreen({ state, winner, winnerScale, isMiniPreview = false }:
   const isPublicWindow = isPublicDisplayWindow() || isMiniPreview;
   // FINAL BROADCAST TEMPLATE: RED is always LEFT, BLUE is always RIGHT on
   // the audience display — matching Player Call, the live match screen,
-  // and every other screen in the app. (This used to say the opposite and
-  // rendered BLUE on the left / RED on the right, inconsistent with the
-  // rest of the broadcast.) The screen is intentionally static and
-  // information-driven: no explosive reveal, no confetti burst, and no
-  // moving trophy. The exact WAB-TKD trophy asset supplied for this
-  // project is used in the center.
+  // and every other screen in the app. The result is information-driven
+  // with a premium medal reveal; no cup/trophy is used anywhere in the
+  // winner presentation.
   const redSide: PlayerColor = 'hong';
   const blueSide: PlayerColor = 'chung';
   const rounds = Math.max(state.config?.rounds || 3, state.roundWinners?.length || 0);
-  const trophyUrl = trophyWabTkdUrl;
+  const medalUrl = medalWabTkdUrl;
 
   const meta = (side: PlayerColor) => {
     const p = state[side]?.player || {};
@@ -556,17 +470,6 @@ function TeamWinnerScreen({ state, winner, winnerScale, isMiniPreview = false }:
   };
 
   const openAudience = async () => { try { await window.electronAPI?.openPublicDisplay?.(); } catch {} };
-  const openDesignStudio = () => {
-    const a = String(state.animationController?.activeAnimation || '').toUpperCase();
-    const map: Record<string,string> = { TEAM_CALL:'team-call', SINGLE_PLAYER_CALL:'player-call', PLAYER_CALL:'player-call', PLAYER_CHANGE:'player-change', KO:'ko', DOCTOR:'doctor', KYESHI:'kyeshi', WOO_SE_GIROK:'woose-girok', 'WOO-SE-GIROK':'woose-girok', MATCH_RESULT:'match-result' };
-    const animationId = map[a] || (state.status === 'finished' && state.result ? 'winner' : 'team-call');
-    const displayId = (() => { try { return new URLSearchParams(window.location.search).get('displayId') || ''; } catch { return ''; } })();
-    const qs = new URLSearchParams({ animationId, mirror: 'public' });
-    if (displayId) qs.set('displayId', displayId);
-    const url = `${window.location.origin}/broadcast-design?${qs.toString()}`;
-    const opened = window.open(url, 'WAB-TKD-Broadcast-Design-Studio', 'width=1800,height=1100,resizable=yes,scrollbars=yes');
-    if (!opened) window.location.assign(url);
-  };
   const fullScreen = async () => { try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); } catch {} };
 
   return (
@@ -583,18 +486,6 @@ function TeamWinnerScreen({ state, winner, winnerScale, isMiniPreview = false }:
       <div className="absolute inset-3 pointer-events-none rounded-2xl" style={{ border: '2px solid rgba(255,216,102,.6)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.06), inset 0 0 90px rgba(255,200,60,.08), 0 0 40px rgba(255,200,60,.1)' }} />
 
       <div className="relative z-10 h-full flex flex-col p-3 md:p-5 gap-3">
-        {isPublicWindow && !isMiniPreview && (
-          <button
-            onClick={openDesignStudio}
-            className="fixed top-3 right-3 z-[1200] rounded-xl px-3 py-2 text-[9px] font-black tracking-[.12em] backdrop-blur-md"
-            style={{ border: '1px solid rgba(255,216,102,.55)', background: 'rgba(3,6,12,.72)', color: '#ffd866', boxShadow: '0 0 18px rgba(255,200,60,.12)' }}
-            title="Edit exactly what is shown on this Public Display"
-          >
-            <Palette size={12} className="inline mr-1"/> EDIT DISPLAY
-          </button>
-        )}
-        <BroadcastDesignRuntime />
-        <BroadcastDesignOverlay />
         <header className="flex items-center justify-between px-2 md:px-4 shrink-0">
           <div className="flex items-center gap-2.5">
             <img data-wab-layer-id="winner-header-logo" src={appIconUrl} alt="" className="w-10 h-10 md:w-12 md:h-12 rounded-xl" />
@@ -623,7 +514,12 @@ function TeamWinnerScreen({ state, winner, winnerScale, isMiniPreview = false }:
               } as any} />
             ))}
             <div className="absolute inset-x-0 top-0 h-1" style={{ background: 'linear-gradient(90deg, transparent, #ffd866, #fff6c0, #ffd866, transparent)' }} />
-            {/* Slowly rotating light rays behind the trophy — a real pedestal-spotlight moment */}
+            <style>{`
+              @keyframes teamMedalEnter { 0%{opacity:0;transform:scale(.62) rotate(-10deg)} 70%{opacity:1;transform:scale(1.08) rotate(2deg)} 100%{opacity:1;transform:scale(1) rotate(0)} }
+              @keyframes teamMedalFloat { 0%,100%{transform:translateY(0) rotate(-1deg)} 50%{transform:translateY(-8px) rotate(1deg)} }
+              @keyframes teamGoldSweep { 0%{transform:translateX(-120%)} 100%{transform:translateX(120%)}}
+            `}</style>
+            {/* Premium medal spotlight — award object only, never a cup/trophy. */}
             <div className="absolute pointer-events-none" style={{
               width: 'min(60vw, 900px)', height: 'min(60vw, 900px)', top: '38%', left: '50%',
               transform: 'translate(-50%,-50%)',
@@ -641,7 +537,11 @@ function TeamWinnerScreen({ state, winner, winnerScale, isMiniPreview = false }:
               }} />
             ))}
             <div className="font-display font-black tracking-[.24em] text-[#ffd866] relative z-20" style={{ fontSize: 10 }} >{state.competitionName || t('broadcastChampionship')}</div>
-            <img src={trophyUrl} alt="WAB-TKD championship trophy" className="relative z-20 object-contain" style={{ width: 'min(29vw, 430px)', height: 'min(58vh, 560px)', filter: 'drop-shadow(0 0 22px rgba(255,240,200,.8)) drop-shadow(0 0 46px rgba(255,216,102,.6)) drop-shadow(0 0 84px rgba(255,170,0,.32))', objectPosition: 'center', animation: 'trophyRise 1.1s cubic-bezier(0.2,0.7,0.25,1) both, trophyFloat 3.6s ease-in-out 1.1s infinite' }} />
+            <div className="relative z-20 flex items-center justify-center" style={{ width: 'min(31vw, 500px)', height: 'min(52vh, 500px)', animation: 'teamMedalEnter 0.9s cubic-bezier(.16,1,.3,1) .18s both' }}>
+              <div className="absolute inset-[10%] rounded-full bg-[#ffd866]/10 blur-3xl" />
+              <div className="absolute inset-[18%] rounded-full border border-[#ffd866]/25" style={{ boxShadow: '0 0 55px rgba(255,216,102,.18), inset 0 0 30px rgba(255,216,102,.08)' }} />
+              <img data-wab-layer-id="winner-medal" src={medalUrl} alt="WAB-TKD championship medal" className="relative h-full w-full object-contain" style={{ filter: 'drop-shadow(0 0 24px rgba(255,240,180,.95)) drop-shadow(0 0 58px rgba(255,216,102,.62)) drop-shadow(0 0 95px rgba(255,170,0,.30))', animation: 'teamMedalFloat 3.4s ease-in-out .95s infinite' }} />
+            </div>
 
           </section>
 
@@ -683,7 +583,6 @@ function TeamWinnerScreen({ state, winner, winnerScale, isMiniPreview = false }:
         </div>
 
         <div className="flex justify-center gap-2 shrink-0">
-          {(!isPublicWindow || isPublicDisplayWindow()) && !isMiniPreview && <button onClick={openDesignStudio} className="px-5 py-2 rounded-lg font-display font-black text-xs tracking-widest" style={{ border: '1px solid rgba(255,216,102,.65)', background: 'rgba(255,190,40,.12)', color: '#ffd866' }} title="Broadcast Design Studio — تحرير ما يظهر على شاشة الجمهور"><Palette size={13} className="inline mr-1"/> DESIGN / EDIT DISPLAY</button>}
           <button onClick={openAudience} className="px-5 py-2 rounded-lg font-display font-black text-xs tracking-widest" style={{ border: '1px solid rgba(255,216,102,.65)', background: 'rgba(255,190,40,.12)', color: '#ffd866' }}>▣ {t('broadcastAudienceScoreboard')}</button>
           <button onClick={fullScreen} className="px-4 py-2 rounded-lg font-display font-bold text-xs" style={{ border: '1px solid rgba(255,255,255,.16)', background: 'rgba(0,0,0,.45)', color: 'rgba(255,255,255,.72)' }} >{t('broadcastFullScreen')}</button>
         </div>
@@ -984,7 +883,7 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
     roundActiveColor: '#f5c842',
     winnerColor: '#f5c842',
     // Video Replay (IVR) request banner text — white or yellow (or any color)
-    ivrRequestColor: '#ffffff',
+    ivrRequestColor: '#f5c842',
     // FIGHT badge
     fightText: 'FIGHT',
     fightColor: '#22c55e',
@@ -1362,8 +1261,7 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
   const resultConfirmed = Boolean(result && state.resultConfirmed === true);
   const currentFrame: 'fight' | 'rest' | 'match_end' =
     status === 'finished' && resultConfirmed ? 'match_end' : status === 'rest' ? 'rest' : 'fight';
-  const publicResultWaiting = status === 'finished' && Boolean(result) && !resultConfirmed;
-  const currentRoundDecision = state.roundWinners.find(r => r.round === currentRound)?.decisionType;
+    const currentRoundDecision = state.roundWinners.find(r => r.round === currentRound)?.decisionType;
   const currentRoundDecisionLabel = currentRoundDecision === 'AI_RECOMMENDATION' ? 'AI DECISION' : currentRoundDecision === 'WOOSE_GIROK' ? 'WOO-SE-GIROK' : '';
 
   // Standby splash — takes priority over EVERYTHING else on this screen
@@ -1399,30 +1297,9 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
     );
   }
 
-  // Final result hold: the public display stays neutral while the Main
-  // Referee reviews the result. No winner, score reveal, medal, or result
-  // animation is rendered until CONFIRM_FINAL_RESULT is received.
-  if (publicResultWaiting) {
-    return (
-      <div
-        dir="ltr"
-        className={`fixed inset-0 bg-black overflow-hidden ${isMiniPreview ? 'public-scoreboard-mini' : ''}`}
-        onMouseEnter={() => setShowNav(true)}
-        onMouseLeave={() => setShowNav(false)}
-      >
-        {persistentTopNav}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative w-[min(760px,88vw)] rounded-3xl border border-white/10 bg-black/70 backdrop-blur-xl px-10 py-12 text-center shadow-2xl">
-            <div className="mx-auto mb-5 h-3 w-3 rounded-full bg-[hsl(var(--gold))] animate-pulse" />
-            <div className="font-display text-xs tracking-[.45em] text-[hsl(var(--gold))]">WAB-TKD</div>
-            <div className="mt-3 font-display text-3xl md:text-5xl font-black uppercase tracking-[.08em] text-white">FINAL RESULT</div>
-            <div className="mt-4 text-sm md:text-base tracking-[.18em] text-white/45 uppercase">Awaiting referee confirmation</div>
-            <div className="mt-8 text-[10px] tracking-[.32em] text-white/25 uppercase">RESULT HOLD · OFFICIAL REVIEW</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Do not show the legacy referee-review result card. While the referee is reviewing, keep the normal scoreboard frozen
+  // in its current state. The winner renderer becomes visible immediately
+  // after CONFIRM_FINAL_RESULT, with no intermediate result animation.
 
   // Pre-match calling screen — shown for EVERY match (tournament, friendly,
   // or Par Équipe) until the referee presses "Match Ready" on the Operator
@@ -1509,10 +1386,25 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
     )
   );
   const teamCallOverlay = teamCallActive ? (
-    <div data-wab-layer-root="team-call" className="fixed inset-0 z-[950] pointer-events-none overflow-hidden">
+    <div data-wab-layer-root="team-call" className="fixed inset-0 z-[950] pointer-events-none overflow-hidden" data-wab-broadcast-root="team-call">
       <LiveTeamCallBroadcast key={`team-call-${state.animationController?.animationId || 'none'}`} state={state} dispatch={dispatch} isMiniPreview={isMiniPreview} />
     </div>
   ) : null;
+
+  // TEAM CALL is an exclusive broadcast scene. Do not render the normal live
+  // scoreboard underneath it: on the embedded Audience Preview the team-call
+  // frame was opaque enough to hide that base UI, while the real second-window
+  // compositor could expose the underlying RED/BLUE/player-information layer
+  // through transparent artwork. That is the source of the "good in Audience /
+  // overlapped on second screen" discrepancy. Both surfaces now receive the
+  // exact same isolated scene and nothing else can occupy its centre/edges.
+  if (teamCallActive) {
+    return (
+      <div dir="ltr" className={`fixed inset-0 overflow-hidden ${isMiniPreview ? 'public-scoreboard-mini' : ''} public-scoreboard-team-call-exclusive`} style={{ background: '#03050a' }}>
+        {teamCallOverlay}
+      </div>
+    );
+  }
 
   // One cinematic at a time. This prevents the round intro, call frames,
   // matchup and standby cards from stacking over each other before LIVE.
@@ -2259,15 +2151,19 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
       if (state.showTeamResultCard) return <TeamResultCard state={state} winner={w} isMiniPreview={isMiniPreview} />;
       return <TeamWinnerScreen state={state} winner={w} winnerScale={winnerScale} isMiniPreview={isMiniPreview} />;
     }
-    // Individual (non-team) match end: the dedicated IndividualWinnerAnimation
-    // cinematic has been removed per request — this now falls through to the
-    // same "Daedo style" static result frame already used for the operator
-    // mini-preview (category bar, MATCH RESULT header, winner card with
-    // photo/name/club, MVP), instead of a separate animated component.
-    const displayName = isTeamReveal ? (state.teamNames![w]) : broadcastName(state[w].player.name, nameFormat);
+    // Individual matches use the single production Winner renderer. It is a
+    // static 1920x1080 information frame: no cinematic intro or legacy result
+    // hold is inserted before it. Team-result rendering remains untouched.
+    if (!isTeamReveal) {
+      return <IndividualWinnerAnimation state={state} winner={w} />;
+    }
+    const displayName = state.teamNames![w];
     const chungBig = isTeamReveal ? state.chung.totalScore : chungRoundWins;
     const hongBig = isTeamReveal ? state.hong.totalScore : hongRoundWins;
     const resultMethodLabel = isTeamReveal ? 'فارق النقاط' : result.method;
+    const isKoResult = !isTeamReveal && String(result.method || '').toUpperCase().replace(/[^A-Z]/g, '') === 'KO';
+    const isGoldenResult = !isTeamReveal && String(result.method || '').toUpperCase() === 'GDP';
+    const koResultIcon = w === 'chung' ? koBlueLogoUrl : koRedLogoUrl;
     // Par Équipe winner reveal also needs the team photo, the CLUB logo/name
     // (separate from the team's own identity), and every player who
     // fought — not just the team name — so the audience sees the whole
@@ -2391,6 +2287,10 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
               <span className="font-display font-black tracking-[.2em]" style={{ fontSize: 'clamp(30px,4vw,58px)', color: winColor, textShadow: `0 0 28px ${winGlow}` }}>WINNER</span>
             </div>
             <div className="mt-2 font-display font-black text-white/85 tracking-[.12em] truncate" style={{ fontSize: 'clamp(16px,2vw,28px)', maxWidth: '65vw' }}>{displayName.toUpperCase()}</div>
+            <div className="mt-2 flex items-center gap-2">
+              {isKoResult && <img data-wab-layer-id="winner-ko-icon" src={koResultIcon} alt="KO" className="object-contain" style={{ width: 72, height: 40 }} />}
+              <span className={`rounded-md border px-3 py-1 font-display font-black text-[9px] tracking-[.18em] ${isGoldenResult ? 'border-yellow-300/50 bg-yellow-300/10 text-yellow-200' : isKoResult ? 'border-red-300/40 bg-red-300/10 text-red-100' : 'border-white/10 bg-black/25 text-white/45'}`}>{isGoldenResult ? 'GOLDEN POINT' : isKoResult ? 'KNOCKOUT · KO' : String(resultMethodLabel || 'PTF').toUpperCase()}</span>
+            </div>
           </div>
           <div className="shrink-0 flex items-center justify-center" style={{ width: 'clamp(100px,12vw,170px)', height: 'clamp(100px,12vw,170px)' }}>
             <img data-wab-layer-id="winner-trophy" src={medalWabTkdUrl} alt="WAB-TKD championship medal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(0 0 18px rgba(255,226,120,.95)) drop-shadow(0 0 55px rgba(255,170,0,.45))', animation: winnerScale ? 'winnerMedalFloat 3s ease-in-out .7s infinite' : 'none' }} />
@@ -2403,8 +2303,8 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
           <div className="rounded-2xl p-4 flex flex-col justify-center" style={{ border: '2px solid rgba(255,216,102,.32)', background: 'rgba(0,0,0,.38)', boxShadow: 'inset 0 0 30px rgba(255,216,102,.035)' }}>
             <div className="text-center font-display font-black tracking-[.2em] text-[#ffd866]" style={{ fontSize: 10 }}>ROUNDS WON</div>
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="text-center"><div className="font-display font-black leading-none" style={{ fontSize: 'clamp(48px,6vw,76px)', color: 'hsl(0 80% 60%)', textShadow: '0 0 28px hsl(0 72% 51% / .5)' }}>{hongBig}</div><div className="text-[9px] font-black tracking-[.16em] text-red-200/70">RED</div></div>
-              <div className="text-center"><div className="font-display font-black leading-none" style={{ fontSize: 'clamp(48px,6vw,76px)', color: 'hsl(217 91% 60%)', textShadow: '0 0 28px hsl(217 91% 55% / .5)' }}>{chungBig}</div><div className="text-[9px] font-black tracking-[.16em] text-blue-200/70">BLUE</div></div>
+              <div className="text-center"><div className="font-display font-black leading-none" style={{ fontSize: 'clamp(58px,7vw,94px)', color: 'hsl(0 80% 60%)', textShadow: '0 0 28px hsl(0 72% 51% / .5)' }}>{hongBig}</div><div className="text-[9px] font-black tracking-[.16em] text-red-200/70">RED</div></div>
+              <div className="text-center"><div className="font-display font-black leading-none" style={{ fontSize: 'clamp(58px,7vw,94px)', color: 'hsl(217 91% 60%)', textShadow: '0 0 28px hsl(217 91% 55% / .5)' }}>{chungBig}</div><div className="text-[9px] font-black tracking-[.16em] text-blue-200/70">BLUE</div></div>
             </div>
             <div className="mt-3 h-px bg-white/15" />
             <div className="mt-2 text-center text-[8px] tracking-[.12em] text-white/35">RED ←────────→ BLUE</div>
@@ -2414,10 +2314,13 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
             <div className="mt-2 divide-y divide-white/10">
               {Array.from({ length: Math.max(3, state.config?.rounds || 3) }, (_, idx) => idx + 1).map(rn => {
                 const rw = state.roundWinners.find(r => r.round === rn);
+                const roundKo = rw && String(rw.method || '').toUpperCase().replace(/[^A-Z]/g, '') === 'KO';
+                const roundDecision = rw?.decisionType === 'AI_RECOMMENDATION' ? 'AI' : rw?.decisionType === 'WOOSE_GIROK' ? 'WOO-SE-GIROK' : rw?.method ? String(rw.method).toUpperCase() : '';
                 return <div key={rn} className="grid grid-cols-[1fr_1fr_1fr] items-center gap-3 py-2.5 font-display border-b border-white/5 last:border-b-0">
-                  <span className="text-white/60 font-black tracking-[.12em] text-left" style={{ fontSize: 10 }}>ROUND {rn}</span>
+                  <span className="text-white/60 font-black tracking-[.12em] text-left flex items-center gap-2" style={{ fontSize: 10 }}>ROUND {rn}{roundKo && rw && rw.winner !== 'draw' && <img src={rw.winner === 'chung' ? koBlueLogoUrl : koRedLogoUrl} alt="KO" style={{ width: 34, height: 22, objectFit: 'contain' }} />}</span>
                   <span className="text-center font-black text-blue-300" style={{ fontSize: 20 }}>{rw ? rw.chungScore : '—'}</span>
                   <span className="text-center font-black text-red-300" style={{ fontSize: 20 }}>{rw ? rw.hongScore : '—'}</span>
+                  {roundDecision && <span className="col-span-3 -mt-1 text-center text-[8px] font-black tracking-[.16em] text-white/35">{roundDecision}</span>}
                 </div>;
               })}
             </div>
@@ -2658,324 +2561,171 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
   }
 
   // ================================================================
-  // ⏱️ REST / INTERMISSION FRAME
+  // ⏱️ REST / INTERMISSION FRAME — static information layout
   // ================================================================
   if (currentFrame === 'rest') {
     const restProgress = config.restTime > 0 ? timeRemaining / config.restTime : 0;
-    const timerColor = restProgress > 0.5 ? 'hsl(142 71% 45%)' : restProgress > 0.2 ? 'hsl(45 93% 58%)' : 'hsl(0 72% 51%)';
+    const timerColor = restProgress > 0.2 ? '#25d96b' : '#ffd866';
     const bluePlayer = state.chung.player;
     const redPlayer = state.hong.player;
-    const nextBlue = nextMatch?.player2;
-    const nextRed = nextMatch?.player1;
     const judges = Math.max(0, Number(state.connectedJudgeCount ?? 0));
-    const refereeConnected = Boolean(state.publicBroadcastLive);
+    const judgesAllowed = Math.max(1, Number(state.config?.judgeCount ?? 3));
     const roundsTotal = Math.max(1, Number(config.rounds || 3));
     const nextRound = Math.min(roundsTotal, currentRound + 1);
-    const roundLabel = `${currentRound} / ${roundsTotal}`;
     const restLabel = state.isGoldenRound ? 'GOLDEN ROUND REST' : `ROUND ${currentRound} REST`;
     const restPhase = getRestPhase(timeRemaining, state.status, config.restTime);
     const restPhaseLabel = getRestPhaseLabel(restPhase, lang);
-    const decisionLabel = currentRoundDecisionLabel || (state.pendingRoundDecision ? 'AI TIE ANALYSIS' : 'WAITING FOR NEXT ROUND');
-    const lastRoundResult = state.roundWinners?.find(r => r.round === currentRound);
+    const isFinalRound = currentRound >= roundsTotal;
+    const nextRoundNumber = isFinalRound ? roundsTotal : currentRound + 1;
+    const nextRoundLabel = isFinalRound ? 'FINAL DECISION / NEXT STAGE' : `ROUND ${nextRoundNumber}`;
+    const restUrgency = timeRemaining <= 5 ? 'get-ready' : timeRemaining <= 10 ? 'prepare' : 'rest';
     const roundHistory = (state.roundWinners || []).slice().sort((a,b) => a.round - b.round);
     const blueRoundWins = roundHistory.filter(r => r.winner === 'chung').length;
     const redRoundWins = roundHistory.filter(r => r.winner === 'hong').length;
-    const roundMatchScore = `${blueRoundWins} — ${redRoundWins}`;
-    const lastRoundWinnerLabel = lastRoundResult
-      ? (lastRoundResult.winner === 'draw' ? (ui('DRAW','تعادل','ÉGALITÉ')) : lastRoundResult.winner === 'chung' ? (ui('BLUE / CHUNG','أزرق (تشونغ)','BLEU / CHUNG')) : (ui('RED / HONG','أحمر (هونغ)','ROUGE / HONG')))
-      : '';
-    const roundMethodLabel = (method?: string, decisionType?: string) => {
-      if (decisionType === 'WOOSE_GIROK') return ui('WOO-SE-GIROK DECISION','قرار WOO-SE-GIROK','DÉCISION WOO-SE-GIROK');
-      if (decisionType === 'AI_RECOMMENDATION') return ui('AI DECISION','قرار تحليل AI','DÉCISION IA');
-      if (method === 'superiority') return ui('JUDGES DECISION / SUPERIORITY','قرار الحكام / الأفضلية','DÉCISION DES JUGES / SUPÉRIORITÉ');
-      if (method === 'gamjeom') return ui('GAM-JEOM ADVANTAGE','بفارق Gam-jeom','AVANTAGE GAM-JEOM');
-      if (method === 'score') return ui('POINT GAP','بفارق النقاط','ÉCART DE POINTS');
-      if (method === 'draw') return ui('DRAW','تعادل','ÉGALITÉ');
-      return method ? String(method).toUpperCase() : '';
-    };
-    const finalRoundAlert = lastRoundResult && (currentRound >= roundsTotal || state.result)
-      ? (lastRoundResult.decisionType === 'WOOSE_GIROK' || lastRoundResult.decisionType === 'AI_RECOMMENDATION' || lastRoundResult.method === 'superiority'
-        ? (ui('ENDED BY DECISION','انتهت بقرار','TERMINÉ PAR DÉCISION'))
-        : (ui('ENDED BY POINT GAP','انتهت بفارق النقاط','TERMINÉ PAR ÉCART DE POINTS')))
-      : '';
-    const redGamjeom = getGamjeomForRound('hong');
-    const blueGamjeom = getGamjeomForRound('chung');
-    // Whole-match totals for the rest-time corner panels (Daedo-style
-    // reference layout): GAM-JEOM/HITS accumulate across every round played
-    // so far, unlike getGamjeomForRound() above which is current-round-only.
-    const matchGamjeom = (player: PlayerColor) => state.events.filter(e => e.player === player && e.type === 'gamjeom' && (state.config.warningResetPerRound === false || e.round === state.currentRound)).length;
-    const matchHits = (player: PlayerColor) => state.events.filter(e => e.player === player && e.type !== 'gamjeom' && e.type !== 'warning').length;
-    const redMatchGamjeom = matchGamjeom('hong');
-    const blueMatchGamjeom = matchGamjeom('chung');
-    const redMatchHits = matchHits('hong');
-    const blueMatchHits = matchHits('chung');
-    const roundScoreCell = (side: 'chung' | 'hong', roundNo: number) => {
+    const lastRoundResult = roundHistory.find(r => r.round === currentRound);
+    const roundScore = (side: PlayerColor, roundNo: number) => {
       const r = roundHistory.find(x => x.round === roundNo);
       if (!r) return '—';
-      const v = side === 'chung' ? r.chungScore : r.hongScore;
-      return typeof v === 'number' ? v : '—';
+      return side === 'chung' ? r.chungScore : r.hongScore;
     };
-
-    // IDEA 1 — LAST HIT FLASH: most recent scoring action (not gamjeom/warning)
-    // logged for this player, read straight from the shared event timeline.
-    const HIT_TYPE_LABEL: Record<string, string> = {
-      punch: 'PUNCH', trunk_kick: 'BODY KICK', turning_kick: 'TURNING BODY',
-      head_kick: 'HEAD KICK', turning_head: 'TURNING HEAD',
-    };
-    const lastHitFor = (player: PlayerColor) => {
-      const evs = state.events.filter(e => e.player === player && e.type !== 'gamjeom' && e.type !== 'warning');
-      const last = evs[evs.length - 1];
-      return last ? (HIT_TYPE_LABEL[last.type] || String(last.type).toUpperCase()) : null;
-    };
-    const redLastHit = lastHitFor('hong');
-    const blueLastHit = lastHitFor('chung');
-
-    // IDEA 2 — POINT GAP WATCH: flags when the live score gap has reached the
-    // configured PTG threshold, so the booth knows the next round can end
-    // early by point gap the moment it restarts. Purely informational — the
-    // actual PTG trigger/decision stays owned by the match engine, unchanged.
-    const pointGapThreshold = Math.max(0, Number(config.pointGap) || 0);
-    const liveGap = Math.abs(Number(state.chung.totalScore || 0) - Number(state.hong.totalScore || 0));
-    const pointGapWatch = pointGapThreshold > 0 && liveGap >= pointGapThreshold;
-    const pointGapLeader = state.chung.totalScore > state.hong.totalScore ? 'chung' : state.hong.totalScore > state.chung.totalScore ? 'hong' : null;
-
-    // IDEA 4 — GAM-JEOM TIMELINE: which round each warning was issued in, for
-    // quick referee/coach review during the break (most recent first, capped).
-    const gamjeomTimeline = (player: PlayerColor) => state.events
-      .filter(e => e.player === player && e.type === 'gamjeom')
-      .map(e => e.round)
-      .slice(-6)
-      .reverse();
-    const redGamjeomRounds = gamjeomTimeline('hong');
-    const blueGamjeomRounds = gamjeomTimeline('chung');
-
-    // IDEA 5 — BEST OF THE ROUND: which corner landed more scoring hits in
-    // the round that just ended (a star, not a formal ruling).
-    const roundHitCount = (player: PlayerColor) => state.events.filter(e => e.player === player && e.round === currentRound && e.type !== 'gamjeom' && e.type !== 'warning').length;
-    const redRoundHits = roundHitCount('hong');
-    const blueRoundHits = roundHitCount('chung');
-    const bestOfRound = redRoundHits === blueRoundHits ? null : redRoundHits > blueRoundHits ? 'hong' : 'chung';
-
-    const bodyHitsFor = (player: PlayerColor) => state.events.filter(e => e.player === player && (e.type === 'trunk_kick' || e.type === 'turning_kick')).length;
-    const headHitsFor = (player: PlayerColor) => state.events.filter(e => e.player === player && (e.type === 'head_kick' || e.type === 'turning_head')).length;
-    // Rest-screen panel shown in place of the giant nationality flag: when
-    // no player photo is set, a huge flag filling most of the panel was the
-    // only thing there. This gives that space real information instead —
-    // the round-by-round score, the rounds-won total, and hit counts.
-    const RestRoundBreakdown = ({ side }: { side: PlayerColor }) => {
-      const wins = side === 'hong' ? redRoundWins : blueRoundWins;
-      const accent = side === 'hong' ? 'hsl(0 80% 64%)' : 'hsl(217 91% 64%)';
+    const matchHits = (side: PlayerColor) => state.events.filter(e => e.player === side && !['gamjeom','warning'].includes(e.type)).length;
+    const matchGamjeom = (side: PlayerColor) => state.events.filter(e => e.player === side && e.type === 'gamjeom').length;
+    const playerPhoto = (side: PlayerColor) => side === 'chung' ? (bluePlayer?.photoUrl || bluePlayer?.photo) : (redPlayer?.photoUrl || redPlayer?.photo);
+    const playerName = (side: PlayerColor) => side === 'chung' ? (bluePlayer?.name || 'CHUNG') : (redPlayer?.name || 'HONG');
+    const playerCountry = (side: PlayerColor) => side === 'chung' ? (bluePlayer?.nationality || '') : (redPlayer?.nationality || '');
+    const playerClub = (side: PlayerColor) => side === 'chung' ? (bluePlayer?.club || '') : (redPlayer?.club || '');
+    const playerNumber = (side: PlayerColor) => side === 'chung' ? bluePlayer?.playerNumber : redPlayer?.playerNumber;
+    const playerFlag = (side: PlayerColor) => side === 'chung' ? bluePlayer?.nationality : redPlayer?.nationality;
+    const renderPlayerFrame = (side: PlayerColor) => {
+      const blue = side === 'chung';
+      const accent = blue ? '#3ea5ff' : '#ff4555';
+      const photo = playerPhoto(side);
+      const country = playerCountry(side);
       return (
-        <div data-wab-layer-id={`rest-round-breakdown-${side}`} className="w-[78%] max-w-[250px] px-2 py-1 text-center">
-          {/* Clean round list: no small surrounding score/total boxes. */}
-          <div className="font-display font-black text-[9px] tracking-[.24em] text-white/45 mb-2">{ui('ROUNDS','الجولات','MANCHES')}</div>
-          <div className="space-y-1.5">
-            {[1, 2, 3].map(rn => (
-              <div key={rn} className="flex items-center justify-center gap-5 py-0.5">
-                <span className="w-10 text-right text-[10px] text-white/45 font-display font-black tracking-[.12em]">R{rn}</span>
-                <span className="font-display font-black text-[clamp(20px,2vw,30px)] leading-none tabular-nums text-white" style={{ textShadow: `0 0 16px ${accent}55` }}>
-                  {roundScoreCell(side, rn)}
-                </span>
+        <section className="relative flex min-h-0 flex-col overflow-hidden rounded-[24px] border-2 bg-black/50 p-4" style={{ borderColor: `${accent}aa`, background: `linear-gradient(145deg, ${accent}18, rgba(0,0,0,.72) 42%, rgba(255,216,102,.035))`, boxShadow: `0 0 42px ${accent}22, inset 0 0 34px ${accent}0d` }}>
+          <div className="flex items-center justify-between border-b border-[#ffd866]/20 pb-3">
+            <div className="text-[11px] font-black tracking-[.26em]" style={{ color: accent }}>{blue ? 'BLUE PLAYER' : 'RED PLAYER'}</div>
+            <div className="text-[10px] font-black tracking-[.18em] text-[#ffd866]/65">{blue ? 'CHUNG' : 'HONG'}</div>
+          </div>
+          <div className="mt-3 px-2 py-2">
+            <div className={`flex items-center gap-3 ${blue ? 'flex-row-reverse' : ''}`}>
+              {photo ? <div className="relative shrink-0"><img src={photo} alt="" className="h-16 w-16 rounded-xl object-cover" style={{ boxShadow: `0 0 0 2px ${accent}66, 0 0 20px ${accent}25` }} />{playerFlag(side) && <div className={`absolute -bottom-1 ${blue ? '-right-1' : '-left-1'} overflow-hidden rounded border border-white/80 bg-black/70`}><FlagImage code={playerFlag(side) || ''} size={42} className="h-5 w-8 object-cover" /></div>}</div> : playerFlag(side) ? <FlagImage code={playerFlag(side) || ''} size={180} className="h-16 w-24 shrink-0 rounded-lg object-cover shadow-[0_0_24px_rgba(255,216,102,.18)]" /> : <div className="h-16 w-24 shrink-0 rounded-lg border border-white/10 bg-white/5" />}
+              <div className={`min-w-0 flex-1 ${blue ? 'text-right' : 'text-left'}`}>
+                <div className="truncate text-[clamp(24px,2.2vw,38px)] font-black" style={{ color: accent }}>{playerName(side)}</div>
+                <div className={`mt-1 flex items-center gap-2 text-[11px] font-black tracking-[.12em] text-white/55 ${blue ? 'justify-end' : ''}`}>
+                  {playerNumber != null && <span>#{playerNumber}</span>}
+                  {playerClub(side) && <span className="truncate">{playerClub(side)}</span>}
+                </div>
               </div>
-            ))}
+            </div>
           </div>
-          <div className="mt-3 flex items-baseline justify-center gap-4">
-            <span className="font-display text-[9px] tracking-[.2em] text-white/40">TOTAL POINTS</span>
-            <span className="font-display font-black text-[clamp(28px,2.7vw,42px)] leading-none tabular-nums" style={{ color: accent, textShadow: `0 0 18px ${accent}66` }}>
-              {side === 'hong' ? state.hong.totalScore : state.chung.totalScore}
-            </span>
+          <div className="mt-3 flex min-h-0 flex-1 flex-col">
+            <div className="mb-2 text-center text-[9px] font-black tracking-[.28em] text-white/35">ROUNDS</div>
+            <div className="grid gap-1.5">
+              {Array.from({length: roundsTotal}, (_,i) => i + 1).map(rn => (
+                <div key={rn} className="grid grid-cols-[42px_1fr] items-center border-b border-white/8 px-3 py-1.5">
+                  <span className="text-[11px] font-black tracking-[.2em] text-white/35">R{rn}</span>
+                  <span className="text-right text-[21px] font-black tabular-nums" style={{ color: rn === currentRound ? accent : '#fff' }}>{roundScore(side, rn)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-[1fr_auto] items-center rounded-xl border-2 border-white/12 bg-black/35 px-4 py-3">
+              <span className="text-[9px] font-black tracking-[.2em] text-white/40">TOTAL POINTS</span>
+              <span className="text-[34px] font-black tabular-nums" style={{ color: accent }}>{blue ? state.chung.totalScore : state.hong.totalScore}</span>
+            </div>
           </div>
-          {/* Round-win count stays below the round/points area, without a frame. */}
-          <div className="mt-5 pt-3 border-t border-white/10">
-            <div className="font-display font-black text-[8px] tracking-[.28em] text-white/40">{ui('ROUNDS WON','الجولات الفائزة','MANCHES GAGNÉES')}</div>
-            <div className="font-display font-black text-[clamp(30px,3vw,46px)] leading-none mt-1 tabular-nums" style={{ color: '#ffd866', textShadow: '0 0 20px rgba(255,216,102,.45)' }}>{wins}</div>
+          <div className="mt-3 border-t border-white/10 pt-3 text-center">
+            <div className="text-[9px] font-black tracking-[.28em] text-white/35">ROUNDS WON</div>
+            <div className="text-[72px] font-black leading-none" style={{ color: accent, textShadow: `0 0 28px ${accent}55` }}>{blue ? blueRoundWins : redRoundWins}</div>
           </div>
-          <div className="mt-3 flex items-center justify-center gap-5">
-            <HitStatChip kind="body" count={bodyHitsFor(side)} side={side} pulseKey={0} size={22} />
-            <HitStatChip kind="head" count={headHitsFor(side)} side={side} pulseKey={0} size={22} />
+          <div className="mt-3 grid grid-cols-4 gap-1.5 rounded-xl border border-white/10 bg-black/55 p-1.5">
+            <div className="rounded-lg bg-white/[.025] px-1 py-2 text-center"><div className="text-[7px] font-black text-white/35">GAM-JEOM</div><div className="text-xl font-black">{matchGamjeom(side)}</div></div>
+            
+            <div className="rounded-lg bg-white/[.025] px-1 py-2 text-center"><div className="text-[7px] font-black text-white/35">HITS</div><div className="text-xl font-black">{matchHits(side)}</div></div>
+            <div className="rounded-lg bg-white/[.025] px-1 py-2 text-center"><div className="text-[7px] font-black text-[#ffd866]/70">IVR</div><div className="text-xl font-black">{blue ? (state.config.ivrQuotaChung ?? state.config.ivrQuota ?? 0) : (state.config.ivrQuotaHong ?? state.config.ivrQuota ?? 0)}</div></div>
           </div>
-        </div>
+        </section>
       );
     };
 
-    const infoRows = [
-      ['TOURNAMENT TYPE', competitionTypeLabel],
-      ['MAT', state.matNumber ? `MAT ${String(state.matNumber).padStart(2, '0')}` : 'MAT 01'],
-      ['MATCH NO.', state.matchNumber ? String(state.matchNumber).padStart(3, '0') : '---'],
-      ['ROUND', roundLabel],
-      ['AGE', state.ageGroup || '—'],
-      ['GENDER', genderLabel],
-      ['WEIGHT', state.weightCategory || '—'],
-      ['CONTEST TIME', formatTime(config.roundTime || 120)],
-    ];
-
     return (
-      <div key="frame-rest" className={`fixed inset-0 flex flex-col overflow-hidden ${isMiniPreview ? 'public-scoreboard-mini' : ''}`}
-        style={{ background: '#020306', animation: 'frameEnter 0.6s ease-out', color: '#fff' }}
-        onMouseEnter={() => setShowNav(true)} onMouseLeave={() => setShowNav(false)}>
+      <div key="frame-rest" className={`fixed inset-0 flex flex-col overflow-hidden ${isMiniPreview ? 'public-scoreboard-mini' : ''}`} style={{ background: '#020306', color: '#fff' }}>
+        <img src={splashBannerUrl} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[.12]" draggable={false} />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,216,102,.12),transparent_38%),linear-gradient(180deg,rgba(1,3,7,.78),rgba(1,3,7,.94))]" />
         {persistentTopNav}
         {settingsOverlay}{settingsStyleTag}{ivrRequestOverlay}{ivrOverlay}{koOverlay}{doctorCallOverlay}{kyeshiCallOverlay}{cinematicActive ? null : pendingSubOverlay}{substitutionAnimationOverlay || teamCallOverlay || callAnimationOverlay || (state.matchupAnimation ? matchupOverlay : null) || (cinematicActive ? null : nextOnMatchOverlay)}{cinematicActive ? null : readyBanner}{cinematicActive ? null : greetingBanner}{cinematicActive ? null : goldenBanner}{cinematicActive ? null : goldenPointOverlay}{cinematicActive ? null : standingsOverlay}
         {publicMatchMetaBar}
 
-        {showEndOfRound && !state.isGoldenRound && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center" style={{ background: 'rgba(2,3,6,.94)', animation: 'frameEnter 0.3s ease-out' }}>
-            <div className="font-display font-black tracking-[0.25em] text-center" style={{ fontSize: 'clamp(40px, 6vw, 90px)', color: 'hsl(45 93% 58%)', textShadow: '0 0 40px hsl(45 93% 58% / .7)' }}>
-              END OF ROUND {currentRound}
-            </div>
-          </div>
-        )}
-
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(circle at 12% 88%, rgba(32,130,255,.16), transparent 32%), radial-gradient(circle at 88% 88%, rgba(255,42,62,.16), transparent 32%), radial-gradient(circle at 50% 50%, rgba(255,216,102,.055), transparent 48%), linear-gradient(180deg, rgba(255,255,255,.025), transparent 18%, rgba(0,0,0,.45))',
-        }} />
-
-        {/* WT-style one-minute inter-round rest is the default; the configured
-            restTime remains authoritative so custom event formats still work. */}
-        <div className="relative z-10 shrink-0 px-5 py-2.5 border-b border-white/10" style={{ background: 'rgba(0,0,0,.72)' }}>
-          <div className="mx-auto max-w-[1900px] flex items-center justify-between gap-4">
-            <div className="font-display font-black tracking-[.18em] text-[11px] text-white/55 uppercase">{state.competitionName || 'WAB TAEKWONDO'}</div>
-            <div className="font-display font-black tracking-[.22em] text-white text-[clamp(16px,1.5vw,28px)]">{state.division || state.config?.division || 'CADETS - OTHERS'}</div>
-            <div className="flex items-center gap-2 text-[10px] font-display font-black tracking-[.16em] text-white/45"><span className="h-2 w-2 rounded-full" style={{ background: 'hsl(142 71% 45%)', boxShadow: '0 0 10px hsl(142 71% 45%)' }} /> LIVE BROADCAST</div>
+        <div className="relative z-10 shrink-0 px-5 py-3">
+          <div className="mx-auto flex max-w-[1900px] items-center justify-between gap-5">
+            <div className="text-[13px] font-black tracking-[.25em] text-white/45">WAB TAEKWONDO</div>
+            <div className="text-[clamp(24px,2.2vw,40px)] font-black tracking-[.12em] text-white">{state.division || state.config?.division || 'CADETS - OTHERS'}</div>
+            <div className="flex items-center gap-2 text-[10px] font-black tracking-[.18em] text-white/45"><span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(37,217,107,.8)]" /> LIVE BROADCAST</div>
           </div>
         </div>
 
-        {/* FROZEN MATCH STRIP — deliberately mirrors the live scoreboard while
-            making it obvious that the athletes are in rest, not fighting. */}
-        <div className="relative z-10 shrink-0 px-4 pt-3">
-          <div className="mx-auto max-w-[1900px] grid grid-cols-[1fr_minmax(180px,250px)_1fr] gap-2 items-stretch">
-            <div className="rounded-xl overflow-hidden border border-red-500/35" style={{ background: 'linear-gradient(135deg, rgba(155,12,20,.92), rgba(45,3,7,.96))', boxShadow: '0 0 35px rgba(255,42,62,.12)' }}>
-              <div className="px-4 py-2 flex items-center justify-between border-b border-white/10"><span className="font-display font-black text-[10px] tracking-[.25em] text-red-200">RED / HONG</span><span className="text-[10px] text-white/55">GAM-JEOM {redGamjeom}</span></div>
-              <div className="px-4 py-2 flex items-center gap-3"><span className="font-display font-black text-[clamp(16px,1.7vw,28px)] truncate">{broadcastName(redPlayer.name, nameFormat, 'HONG')}</span><span className="text-[10px] font-black text-white/45">{redPlayer.nationality || '—'}</span></div>
-            </div>
-            <div className="rounded-xl border border-white/15 flex flex-col items-center justify-center px-3" style={{ background: 'rgba(2,4,8,.96)', boxShadow: 'inset 0 0 25px rgba(255,255,255,.025)' }}>
-              <div className="font-display text-[9px] text-white/40 tracking-[.3em]">MATCH</div>
-              <div className="font-display font-black text-2xl text-[#ffd866]">{state.matchNumber || '---'}</div>
-              <div className="mt-1 rounded-md border border-white/10 bg-white/[.035] px-3 py-1 font-display text-[9px] font-black tracking-[.16em] text-white/55">REST · R{currentRound}</div>
-            </div>
-            <div className="rounded-xl overflow-hidden border border-blue-500/35" style={{ background: 'linear-gradient(135deg, rgba(8,39,150,.95), rgba(2,8,48,.98))', boxShadow: '0 0 35px rgba(32,130,255,.12)' }}>
-              <div className="px-4 py-2 flex items-center justify-between border-b border-white/10"><span className="font-display font-black text-[10px] tracking-[.25em] text-blue-200">BLUE / CHUNG</span><span className="text-[10px] text-white/55">GAM-JEOM {blueGamjeom}</span></div>
-              <div className="px-4 py-2 flex items-center justify-end gap-3"><span className="text-[10px] font-black text-white/45">{bluePlayer.nationality || '—'}</span><span className="font-display font-black text-[clamp(16px,1.7vw,28px)] truncate">{broadcastName(bluePlayer.name, nameFormat, 'CHUNG')}</span></div>
-            </div>
+        <div className="relative z-10 shrink-0 px-5 pb-3">
+          <div className="mx-auto grid max-w-[1900px] grid-cols-[1fr_250px_1fr] gap-3">
+            <div className="rounded-xl border border-[#ff4555]/45 bg-[#8b0815]/25 px-4 py-3"><div className="text-[9px] font-black tracking-[.22em] text-[#ff6674]">RED PLAYER</div><div className="mt-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[22px] font-black text-white">{playerName('hong')}</div></div>
+            <div className="rounded-xl border border-white/10 bg-black/45 px-4 py-3 text-center"><div className="text-[9px] font-black tracking-[.22em] text-white/35">MATCH</div><div className="mt-1 text-[28px] font-black text-white">{state.matchNumber ? String(state.matchNumber).padStart(3,'0') : '—'}</div><div className="mt-1 text-[9px] font-black tracking-[.15em] text-white/40">REST · R{currentRound}</div></div>
+            <div className="rounded-xl border border-[#3ea5ff]/45 bg-[#0c2c6d]/25 px-4 py-3 text-right"><div className="text-[9px] font-black tracking-[.22em] text-[#55b7ff]">BLUE PLAYER</div><div className="mt-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[22px] font-black text-white">{playerName('chung')}</div></div>
           </div>
         </div>
 
-        {/* MAIN REST STAGE — player image zones + central countdown, matching
-            the requested red/blue broadcast language. */}
-        <div className="relative z-10 flex-1 min-h-0 px-4 py-3">
-          <div className="mx-auto max-w-[1900px] h-full grid grid-cols-[minmax(220px,1fr)_minmax(300px,520px)_minmax(220px,1fr)] gap-4 items-stretch">
-            <div className="relative overflow-hidden rounded-2xl border-2 border-red-500/70" style={{ background: 'radial-gradient(circle at 50% 48%, rgba(255,42,62,.24), transparent 48%), linear-gradient(160deg, rgba(75,5,12,.95), rgba(7,3,7,.98))', boxShadow: '0 0 45px rgba(255,42,62,.16), inset 0 0 45px rgba(255,42,62,.08)' }}>
-              <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 min-w-0">
-                  <span className="relative shrink-0" style={{ width: 22, height: 22 }}>
-                    {(redPlayer.photoUrl || redPlayer.photo) ? (
-                      <img src={redPlayer.photoUrl || redPlayer.photo} alt="" className="w-full h-full rounded-full object-cover border border-white/25 bg-black" />
-                    ) : (
-                      <span className="w-full h-full rounded-full bg-white/10 border border-white/25 flex items-center justify-center text-[9px] font-black text-white/60">{(redPlayer.name || '—').slice(0, 1).toUpperCase()}</span>
-                    )}
-                  </span>
-                  <FlagImage code={redPlayer.nationality || ''} size={20} />
-                  <span className="font-display text-[10px] font-black tracking-[.2em] text-red-200 truncate">{redPlayer.nationality || 'RED CORNER'}</span>
-                </span>
-                <span className="font-display text-[10px] text-white/45 shrink-0">{redPlayer.playerNumber ?? redPlayer.seedNumber ?? '—'}</span>
-              </div>
-              <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-red-950/70 to-transparent" />
-              <div className="absolute inset-0 flex items-end justify-center pt-7 pb-[184px]">
-                <RestRoundBreakdown side="hong" />
-              </div>
-              <div className="absolute bottom-3 left-3 right-3 z-10 text-center max-h-[164px] overflow-hidden">
-                <div className="font-display font-black text-[clamp(15px,1.5vw,25px)] truncate">{broadcastName(redPlayer.name, nameFormat, 'HONG')}</div>
-                <div className="text-[10px] font-black text-white/55 mt-1">{redPlayer.club || '—'} · {redPlayer.nationality || '—'}</div>
-                <div className="mt-2 grid grid-cols-4 gap-1 rounded-lg border border-white/10 bg-black/45 px-2 py-1.5">
-                  <div><div className="text-[8px] text-white/40 font-black tracking-[.12em]">GAM-JEOM</div><div className={`font-display font-black text-3xl ${redMatchGamjeom > 0 ? 'text-orange-400' : 'text-white'}`}>{redMatchGamjeom}</div></div>
-                  <div><div className="text-[8px] text-white/40 font-black tracking-[.12em]">#WON</div><div className="font-display font-black text-2xl text-emerald-400">{redRoundWins}</div></div>
-                  <div><div className="text-[7px] text-white/40 font-black tracking-[.12em]">HITS</div><div className="font-display font-black text-sm text-emerald-400">{redMatchHits}</div></div>
-                  <div><div className="text-[7px] text-white/40 font-black tracking-[.12em] flex items-center gap-0.5"><Video size={8}/> IVR</div><div className="font-display font-black text-sm">{Math.max(0, Math.floor(state.hong.ivrQuota ?? 0))}</div></div>
-                </div>
-                {(redLastHit || redGamjeomRounds.length > 0) && (
-                  <div className="mt-1 flex items-center justify-between gap-2 text-[7px] font-display font-black tracking-[.1em] text-white/40 px-1">
-                    <span className="truncate">{redLastHit ? `LAST: ${redLastHit}` : ''}</span>
-                    {redGamjeomRounds.length > 0 && <span className="text-white/45 shrink-0">GJ @ R{redGamjeomRounds.join(', R')}</span>}
+        <div className="relative z-10 mx-auto grid min-h-0 w-full max-w-[1900px] flex-1 grid-cols-[1fr_minmax(390px,1.08fr)_1fr] gap-4 px-5 pb-5">
+          {renderPlayerFrame('hong')}
+          <section className={`relative flex min-h-0 flex-col items-center overflow-hidden rounded-[26px] border border-white/12 bg-black/45 px-7 py-6 shadow-[0_0_60px_rgba(0,0,0,.5),inset_0_0_35px_rgba(255,216,102,.04)] rest-transition-${restUrgency}`}>
+            <style>{`
+              @keyframes restCorePulse { 0%,100% { transform:scale(1); filter:brightness(1) } 50% { transform:scale(1.035); filter:brightness(1.22) } }
+              @keyframes restSweep { 0% { transform:translateX(-120%) } 100% { transform:translateX(120%) } }
+              @keyframes restRing { 0% { transform:scale(.82); opacity:.65 } 100% { transform:scale(1.18); opacity:0 } }
+              @keyframes readyBlink { 0%,100% { opacity:.55 } 50% { opacity:1 } }
+            `}</style>
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+              <div className="absolute left-1/2 top-[36%] h-[310px] w-[310px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#ffd866]/15" style={{ animation: restUrgency === 'get-ready' ? 'restRing 1s ease-out infinite' : 'none' }} />
+              <div className="absolute left-1/2 top-[36%] h-[230px] w-[230px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" style={{ animation: restUrgency === 'prepare' ? 'restRing 1.6s ease-out infinite' : 'none' }} />
+              <div className="absolute left-0 top-[42%] h-px w-1/2 bg-gradient-to-r from-transparent via-[#ffd866]/45 to-transparent" style={{ animation: 'restSweep 3.4s linear infinite' }} />
+              <div className="absolute right-0 top-[42%] h-px w-1/2 bg-gradient-to-r from-transparent via-[#ffd866]/45 to-transparent" style={{ animation: 'restSweep 3.4s linear infinite reverse' }} />
+            </div>
+            <div className="relative z-10 text-[12px] font-black tracking-[.38em] text-[#ffd866]">{restLabel}</div>
+            <div className="relative z-10 mt-2 text-[clamp(84px,9vw,150px)] font-black leading-none tabular-nums" style={{ color: timerColor, textShadow: `0 0 20px ${timerColor},0 0 60px ${timerColor}66`, animation: restUrgency !== 'rest' ? 'restCorePulse 1s ease-in-out infinite' : 'none' }}>{formatTime(timeRemaining)}</div>
+            <div className="relative z-10 mt-3 h-2.5 w-[88%] overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.max(0,Math.min(1,restProgress))*100}%`, background: timerColor, boxShadow: `0 0 18px ${timerColor}` }} /></div>
+            <div className="relative z-10 mt-5 text-[18px] font-black tracking-[.2em] text-white/75">{restPhaseLabel}</div>
+            <div className="relative z-10 mt-2 text-[10px] font-black tracking-[.18em] text-white/35">NEXT {nextRoundLabel}</div>
+
+            <div className="relative z-10 mt-4 grid w-full grid-cols-3 gap-2">
+              {[currentRound, nextRoundNumber, Math.min(roundsTotal, nextRoundNumber + 1)].filter((n, i, a) => a.indexOf(n) === i).map((rn, index) => {
+                const active = rn === nextRoundNumber && !isFinalRound;
+                const done = rn <= currentRound;
+                return (
+                  <div key={`${rn}-${index}`} className="rounded-xl border px-2 py-2 text-center" style={{ borderColor: active ? 'rgba(255,216,102,.65)' : 'rgba(255,255,255,.10)', background: active ? 'rgba(255,216,102,.08)' : 'rgba(0,0,0,.25)', boxShadow: active ? '0 0 20px rgba(255,216,102,.12)' : 'none' }}>
+                    <div className="text-[7px] font-black tracking-[.18em] text-white/35">{done && rn < nextRoundNumber ? 'COMPLETED' : active ? 'UP NEXT' : 'ROUND'}</div>
+                    <div className={`mt-1 text-[18px] font-black ${active ? 'text-[#ffd866]' : done ? 'text-white/45' : 'text-white/75'}`}>R{rn}</div>
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
 
-            <div className="rounded-2xl border border-white/10 flex flex-col items-center justify-center px-4 py-3" style={{ background: 'radial-gradient(circle at 50% 45%, rgba(255,216,102,.10), transparent 45%), rgba(0,0,0,.72)', boxShadow: '0 0 55px rgba(0,0,0,.55), inset 0 0 30px rgba(255,255,255,.025)' }}>
-              <div className="font-display text-[10px] font-black tracking-[.45em] text-[#ffd866] uppercase">{restLabel}</div>
-              <div className="font-display font-black tabular-nums leading-none mt-1" style={{ fontSize: 'clamp(70px,9vw,145px)', color: timerColor, textShadow: `0 0 18px ${timerColor}, 0 0 55px ${timerColor}` }}>{formatTime(timeRemaining)}</div>
-              <div className="w-[82%] h-2 rounded-full mt-2 overflow-hidden" style={{ background: 'rgba(255,255,255,.08)', boxShadow: 'inset 0 1px 4px rgba(0,0,0,.8)' }}><div className="h-full rounded-full transition-all duration-1000" style={{ width: `${Math.max(0, Math.min(1, restProgress)) * 100}%`, background: timerColor, boxShadow: `0 0 18px ${timerColor}` }} /></div>
-              <div className={`mt-5 font-display font-black text-[clamp(13px,1.2vw,19px)] tracking-[.16em] ${restPhase === 'REFEREE_CONFIRM' ? 'text-[#ffd866]' : restPhase === 'GET_READY' ? 'text-red-200' : 'text-white/75'}`}>{restPhaseLabel}</div>
-              <div className="mt-2 flex items-center gap-2 text-[10px] font-display font-black tracking-[.18em] text-white/40"><Clock size={13} /> {restPhase === 'REFEREE_CONFIRM' ? (ui('ROUND DOES NOT START AUTOMATICALLY','لا يبدأ القتال تلقائيًا','LA MANCHE NE DÉMARRE PAS AUTOMATIQUEMENT')) : (ui(`NEXT ROUND ${nextRound}`,`الجولة التالية ${nextRound}`,`MANCHE SUIVANTE ${nextRound}`))}</div>
-              {lastRoundResult && (
-                <div className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-400/[.06] px-4 py-2 text-center max-w-full">
-                  <div className="font-display text-[9px] tracking-[.25em] text-emerald-300/80">{ui(`ROUND ${currentRound} RESULT`,`نتيجة الجولة ${currentRound}`,`RÉSULTAT DE LA MANCHE ${currentRound}`)}</div>
-                  <div className="font-display font-black text-sm mt-1 truncate">{lastRoundWinnerLabel}{typeof lastRoundResult.chungScore === 'number' && typeof lastRoundResult.hongScore === 'number' ? ` · ${lastRoundResult.hongScore} – ${lastRoundResult.chungScore}` : ''}</div>
-                  <div className="mt-1 text-[9px] font-black tracking-[.14em] text-white/55">{roundMethodLabel(lastRoundResult.method, lastRoundResult.decisionType)}</div>
-                </div>
-              )}
-              <div className="mt-3 rounded-xl border border-[#ffd866]/30 bg-[#ffd866]/[.06] px-4 py-2 text-center max-w-full">
-                <div className="font-display text-[8px] tracking-[.22em] text-[#ffd866]/65">{ui('ROUNDS WON','الجولات الفائزة','MANCHES GAGNÉES')}</div>
-                <div className="font-display font-black leading-none mt-1 text-3xl"><span className="text-[hsl(var(--chung))]">{blueRoundWins}</span><span className="text-white/30 mx-3">—</span><span className="text-[hsl(var(--hong))]">{redRoundWins}</span></div>
-              </div>
-              {finalRoundAlert && (
-                <div className="mt-3 rounded-xl border-2 border-red-300/55 bg-red-500/[.10] px-4 py-3 text-center animate-pulse shadow-[0_0_30px_rgba(255,60,80,.18)]">
-                  <div className="font-display font-black text-[clamp(13px,1.2vw,20px)] tracking-[.18em] text-white">{finalRoundAlert}</div>
-                  <div className="mt-1 font-display font-black text-[10px] tracking-[.18em] text-red-200">{roundMethodLabel(lastRoundResult?.method, lastRoundResult?.decisionType)}</div>
-                </div>
-              )}
-              {restPhase === 'REFEREE_CONFIRM' && <div className="mt-3 rounded-xl border-2 border-[#ffd866]/55 bg-[#ffd866]/[.08] px-4 py-2.5 text-center max-w-full shadow-[0_0_25px_rgba(255,216,102,.12)]"><div className="font-display text-[9px] tracking-[.28em] text-[#ffd866]/75">REFEREE CONTROL</div><div className="font-display font-black text-sm mt-1">{ui('REFEREE CONFIRMATION REQUIRED','اضغط تأكيد الحكم لبدء تحضير الجولة','CONFIRMATION DE L’ARBITRE REQUISE')}</div></div>}
-              <div className="mt-3 rounded-xl border border-[#ffd866]/25 bg-[#ffd866]/[.05] px-4 py-2 text-center max-w-full"><div className="font-display text-[9px] tracking-[.25em] text-[#ffd866]/70">ROUND DECISION</div><div className="font-display font-black text-sm mt-1 truncate">{decisionLabel}</div></div>
+            {lastRoundResult && <div className="mt-5 w-full rounded-xl border border-emerald-400/25 bg-emerald-400/[.035] px-4 py-3 text-center">
+              <div className="text-[8px] font-black tracking-[.22em] text-emerald-300/70">ROUND {currentRound} RESULT</div>
+              <div className="mt-1 text-[16px] font-black">{lastRoundResult.winner === 'chung' ? 'BLUE / CHUNG' : lastRoundResult.winner === 'hong' ? 'RED / HONG' : 'DRAW'} · {lastRoundResult.chungScore} — {lastRoundResult.hongScore}</div>
+              <div className="mt-1 text-[9px] font-black tracking-[.14em] text-white/45">{lastRoundResult.decisionLabel || lastRoundResult.decisionType || (lastRoundResult.method ? String(lastRoundResult.method).toUpperCase() : 'POINT GAP')}</div>
+            </div>}
+
+            <div className="mt-5 grid w-full grid-cols-2 gap-3">
+              <div className="rounded-2xl border-2 border-[#ff4555]/65 bg-[#ff4555]/[.06] px-3 py-3 text-center"><div className="text-[9px] font-black tracking-[.18em] text-[#ff6674]">RED ROUNDS WON</div><div className="mt-1 text-[70px] font-black leading-none text-[#ff4555]">{redRoundWins}</div></div>
+              <div className="rounded-2xl border-2 border-[#3ea5ff]/65 bg-[#3ea5ff]/[.06] px-3 py-3 text-center"><div className="text-[9px] font-black tracking-[.18em] text-[#55b7ff]">BLUE ROUNDS WON</div><div className="mt-1 text-[70px] font-black leading-none text-[#3ea5ff]">{blueRoundWins}</div></div>
             </div>
 
-            <div className="relative overflow-hidden rounded-2xl border-2 border-blue-500/70" style={{ background: 'radial-gradient(circle at 50% 48%, rgba(32,130,255,.24), transparent 48%), linear-gradient(160deg, rgba(5,28,90,.98), rgba(3,5,12,.98))', boxShadow: '0 0 45px rgba(32,130,255,.16), inset 0 0 45px rgba(32,130,255,.08)' }}>
-              <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between gap-2">
-                <span className="font-display text-[10px] text-white/45 shrink-0">{bluePlayer.playerNumber ?? bluePlayer.seedNumber ?? '—'}</span>
-                <span className="flex items-center gap-1.5 min-w-0 flex-row-reverse">
-                  <span className="relative shrink-0" style={{ width: 22, height: 22 }}>
-                    {(bluePlayer.photoUrl || bluePlayer.photo) ? (
-                      <img src={bluePlayer.photoUrl || bluePlayer.photo} alt="" className="w-full h-full rounded-full object-cover border border-white/25 bg-black" />
-                    ) : (
-                      <span className="w-full h-full rounded-full bg-white/10 border border-white/25 flex items-center justify-center text-[9px] font-black text-white/60">{(bluePlayer.name || '—').slice(0, 1).toUpperCase()}</span>
-                    )}
-                  </span>
-                  <FlagImage code={bluePlayer.nationality || ''} size={20} />
-                  <span className="font-display text-[10px] font-black tracking-[.2em] text-blue-200 truncate">{bluePlayer.nationality || 'BLUE CORNER'}</span>
-                </span>
+            <div className="relative z-10 mt-auto w-full border-t border-white/10 pt-4 text-center">
+              <div className={`text-[11px] font-black tracking-[.22em] ${restUrgency === 'get-ready' ? 'text-[#ffd866]' : 'text-white/45'}`} style={{ animation: restUrgency === 'get-ready' ? 'readyBlink .8s ease-in-out infinite' : 'none' }}>
+                {timeRemaining > 0 ? (isFinalRound ? 'PREPARE FOR OFFICIAL RESULT TRANSITION' : `NEXT ROUND R${nextRoundNumber} · REFEREE WILL START SHIJAK`) : (isFinalRound ? 'FINAL DECISION READY' : `ROUND ${nextRoundNumber} READY · WAITING FOR REFEREE`)}
               </div>
-              <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-blue-950/70 to-transparent" />
-              <div className="absolute inset-0 flex items-end justify-center pt-7 pb-[184px]">
-                <RestRoundBreakdown side="chung" />
-              </div>
-              <div className="absolute bottom-3 left-3 right-3 z-10 text-center max-h-[164px] overflow-hidden">
-                <div className="font-display font-black text-[clamp(15px,1.5vw,25px)] truncate">{broadcastName(bluePlayer.name, nameFormat, 'CHUNG')}</div>
-                <div className="text-[10px] font-black text-white/55 mt-1">{bluePlayer.club || '—'} · {bluePlayer.nationality || '—'}</div>
-                <div className="mt-2 grid grid-cols-4 gap-1 rounded-lg border border-white/10 bg-black/45 px-2 py-1.5">
-                  <div><div className="text-[8px] text-white/40 font-black tracking-[.12em]">GAM-JEOM</div><div className={`font-display font-black text-3xl ${blueMatchGamjeom > 0 ? 'text-orange-400' : 'text-white'}`}>{blueMatchGamjeom}</div></div>
-                  <div><div className="text-[8px] text-white/40 font-black tracking-[.12em]">#WON</div><div className="font-display font-black text-2xl text-emerald-400">{blueRoundWins}</div></div>
-                  <div><div className="text-[7px] text-white/40 font-black tracking-[.12em]">HITS</div><div className="font-display font-black text-sm text-emerald-400">{blueMatchHits}</div></div>
-                  <div><div className="text-[7px] text-white/40 font-black tracking-[.12em] flex items-center gap-0.5"><Video size={8}/> IVR</div><div className="font-display font-black text-sm">{Math.max(0, Math.floor(state.chung.ivrQuota ?? 0))}</div></div>
-                </div>
-                {(blueLastHit || blueGamjeomRounds.length > 0) && (
-                  <div className="mt-1 flex items-center justify-between gap-2 text-[7px] font-display font-black tracking-[.1em] text-white/40 px-1">
-                    <span className="truncate">{blueLastHit ? `LAST: ${blueLastHit}` : ''}</span>
-                    {blueGamjeomRounds.length > 0 && <span className="text-white/45 shrink-0">GJ @ R{blueGamjeomRounds.join(', R')}</span>}
-                  </div>
-                )}
-              </div>
+              <div className="mt-2 text-[8px] font-black tracking-[.16em] text-white/30">JUDGES PRESENT <span className={judges > 0 ? 'text-emerald-300' : 'text-white/45'}>{Math.min(judges, judgesAllowed)}/{judgesAllowed}</span> · {restPhase === 'REFEREE_CONFIRM' ? 'REFEREE CONFIRMATION REQUIRED' : 'REST / RECOVER'}</div>
             </div>
-          </div>
+          </section>
+          {renderPlayerFrame('chung')}
         </div>
-
-        {/* Lower info bar (judges/referee/match-info/next-match) intentionally
-            removed from this screen per explicit request — kept out of the
-            DOM entirely rather than just hidden, so it costs nothing. */}
-
-        <style>{`
-          @keyframes restPulseGold {0%,100%{opacity:.8}50%{opacity:1}}
-          @media (max-width: 900px){
-            .public-scoreboard-mini .grid-cols-\[minmax\(220px\,1fr\)_minmax\(300px\,520px\)_minmax\(220px\,1fr\)\]{grid-template-columns:1fr!important}
-          }
-        `}</style>
       </div>
     );
   }
@@ -3005,6 +2755,9 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
             const winner = blue >= 2 ? 'chung' : 'hong';
             const unanimous = blue === 3 || red === 3;
             const winningArm = winner === 'chung' ? judgeDecisionBlueArmUrl : judgeDecisionRedArmUrl;
+            const winnerName = winner === 'chung'
+              ? broadcastName(state.chung.player?.name, nameFormat, 'BLUE PLAYER')
+              : broadcastName(state.hong.player?.name, nameFormat, 'RED PLAYER');
             return (
               <div data-wab-layer-root="woose-girok" data-wab-layer-id="woose-girok-result-root" className="h-full flex flex-col items-center justify-center text-center relative overflow-hidden girok-result-scene">
                 <div className="relative z-10 w-full max-w-[1180px] mx-auto px-4">
@@ -3023,10 +2776,10 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
                             {photo ? <img src={photo} alt="" className="girok-public-photo"/> : <div className="girok-public-photo-placeholder">{name.slice(0,1).toUpperCase()}</div>}
                           </div>
                           <img data-wab-layer-id={`woose-girok-result-arm-${id}`} src={armSrc} alt="" className={`girok-judge-arms-voted is-small ${vote==='chung'?'is-chung-arm':'is-hong-arm'}`}/>
-                          <div className="relative z-10">
+                          <div className="relative z-20">
                             <div className="text-xs font-black">{name}</div>
                             <div className="text-[8px] tracking-[.16em] text-white/45 mt-1">{role}</div>
-                            <div className={`mt-3 text-lg font-display font-black ${vote==='chung'?'text-[hsl(var(--chung))]':'text-[hsl(var(--hong))]'}`}>{vote==='chung'?'BLUE':'RED'}</div>
+                            <div className={`relative z-30 mt-3 text-2xl font-display font-black ${vote==='chung'?'text-[hsl(var(--chung))]':'text-[hsl(var(--hong))]'}`}>{vote==='chung'?'BLUE':'RED'}</div>
                           </div>
                         </div>
                       );
@@ -3038,13 +2791,43 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
                       complete artwork reaches both sides without being cropped. */}
                   <div className={`girok-decision-frame girok-final-decision-panel mx-auto mt-5 relative overflow-hidden ${winner==='chung'?'is-chung':'is-hong'}`}>
                     <img data-wab-layer-id="woose-girok-final-decision-arm" src={winningArm} alt="" className="girok-decision-arm girok-final-decision-arm" />
-                    <div className="relative z-10 px-8 py-7 md:px-12 md:py-9">
-                      <div className="girok-gold-title font-display text-lg md:text-2xl">{unanimous ? 'UNANIMOUS DECISION' : 'MAJORITY DECISION'}</div>
-                      <div className={`mt-2 font-display font-black ${winner==='chung'?'text-[hsl(var(--chung))]':'text-[hsl(var(--hong))]'}`} style={{ fontSize: 'clamp(54px,6.5vw,104px)', lineHeight: 1, textShadow: `0 0 42px ${winner==='chung'?'hsl(var(--chung))':'hsl(var(--hong))'}77` }}>
+                    <div className="relative z-10 px-8 py-6 md:px-12 md:py-7">
+                      <div data-wab-layer-id="woose-girok-winner-kicker" className="font-display text-3xl md:text-5xl font-black uppercase tracking-[.28em] text-[#ffd866]" style={{ textShadow: '0 0 28px rgba(255,216,102,.65)' }}>WINNER</div>
+                      <div data-wab-layer-id="woose-girok-majority-title" className="girok-gold-title mt-1 font-display text-2xl md:text-4xl">{unanimous ? 'UNANIMOUS DECISION' : 'MAJORITY DECISION'}</div>
+                      <div data-wab-layer-id="woose-girok-winner-label" className={`mt-2 font-display font-black ${winner==='chung'?'text-[hsl(var(--chung))]':'text-[hsl(var(--hong))]'}`} style={{ fontSize: 'clamp(48px,5.8vw,94px)', lineHeight: 1, textShadow: `0 0 42px ${winner==='chung'?'hsl(var(--chung))':'hsl(var(--hong))'}77` }}>
                         {winner==='chung' ? 'BLUE WINS' : 'RED WINS'}
                       </div>
-                      <div className="mt-3 font-display font-black text-white" style={{ fontSize: 'clamp(30px,3.5vw,56px)', lineHeight: 1 }}>{blue} — {red}</div>
-                      <div className="mt-2 text-[10px] tracking-[.28em] text-white/50 font-black">ROUND {state.currentRound} · JUDGES DECISION</div>
+                      <div data-wab-layer-id="woose-girok-winner-name" className="mt-2 font-display font-black text-white truncate max-w-[92%] mx-auto" style={{ fontSize: 'clamp(22px,2.7vw,44px)', lineHeight: 1.05 }}>
+                        {winnerName}
+                      </div>
+                      {/* Winner identity is shown only here: real photo when available,
+                          with the national flag, country and club. */}
+                      <div className="relative z-20 mt-4 flex items-center justify-center gap-4">
+                        {(winner === 'chung' ? state.chung.player?.photoUrl || state.chung.player?.photo : state.hong.player?.photoUrl || state.hong.player?.photo) && (
+                          <img
+                            src={winner === 'chung' ? state.chung.player?.photoUrl || state.chung.player?.photo : state.hong.player?.photoUrl || state.hong.player?.photo}
+                            alt=""
+                            className="h-20 w-20 rounded-xl object-cover ring-2 ring-white/35 shadow-[0_0_28px_rgba(255,255,255,.16)]"
+                          />
+                        )}
+                        <div className="text-left">
+                          <div className="flex items-center gap-3">
+                            <FlagImage code={winner === 'chung' ? state.chung.player?.nationality || '' : state.hong.player?.nationality || ''} size={120} className="h-9 w-14 rounded-sm object-cover ring-1 ring-white/45" />
+                            <div className="font-display text-lg md:text-2xl font-black text-white">
+                              {winner === 'chung' ? state.chung.player?.nationality || '—' : state.hong.player?.nationality || '—'}
+                            </div>
+                          </div>
+                          <div className="mt-1 font-display text-sm md:text-lg font-black uppercase text-white/80">
+                            {winner === 'chung' ? state.chung.player?.club || '—' : state.hong.player?.club || '—'}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Decision score: RED is always on the left; BLUE is always on the right. */}
+                      <div data-wab-layer-id="woose-girok-vote-score" className="mt-4 inline-flex items-center justify-center gap-3 rounded-xl border border-white/15 bg-black/35 px-6 py-2.5 font-display font-black" style={{ fontSize: 'clamp(26px,3vw,48px)', lineHeight: 1 }}>
+                        <span className="text-[hsl(var(--hong))]">RED {red}</span>
+                        <span className="text-white/35">—</span>
+                        <span className="text-[hsl(var(--chung))]">{blue} BLUE</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3177,124 +2960,63 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
         </div>
       )}
 
-      {/* ZONE 1: Player names with flags + club + country — top strip (responsive) */}
-      <div className="flex items-stretch shrink-0 relative z-10" style={{ background: 'hsl(224 35% 6%)' }}>
-        {/* Chung player bar — BLUE, always on the right */}
-        <div className="flex-1 flex items-center gap-4 px-6 py-3 min-w-0 flex-row-reverse" style={{ borderBottom: '4px solid hsl(217 91% 55%)', order: 3 }}>
-          <div className="relative shrink-0">
-            <PhotoOrFlag photoUrl={chung.player.photoUrl} nationality={chung.player.nationality}
-              showPhoto={dc.showPhoto} showFlag={dc.showFlag}
-              size={{ height: 'clamp(48px, 4.5vw, 80px)', width: 'clamp(48px, 4.5vw, 80px)', flagWidth: 'clamp(72px, 6.6vw, 120px)' }}
-              className="rounded-md shadow-lg shrink-0 object-cover" />
-            {dc.showFlag && dc.showPhoto && chung.player.photoUrl && chung.player.nationality && (
-              <div className="absolute -bottom-1 -left-1 rounded shadow" style={{ border: '1.5px solid white' }}>
-                <FlagImage code={chung.player.nationality} size={28} className="rounded" style={{ height: '1.3em', width: 'auto' } as any} />
+      {/* ZONE 1: clean player identity strip — no duplicated lower flag/country row. */}
+      <div className="flex shrink-0 items-stretch relative z-10" style={{ background: 'linear-gradient(180deg,rgba(5,7,14,.98),rgba(5,7,14,.90))', borderBottom: '1px solid rgba(255,216,102,.18)' }}>
+        {/* RED — left. Flag is immediately beside the name; photo gets a small flag badge. */}
+        <div className="flex-1 min-w-0 px-6 py-2.5" style={{ borderBottom: '4px solid hsl(0 72% 51%)' }}>
+          <div className="flex items-center gap-4 min-w-0">
+            {dc.showPhoto && hong.player.photoUrl ? (
+              <div className="relative shrink-0">
+                <img src={hong.player.photoUrl} alt="" className="h-[58px] w-[58px] rounded-lg object-cover" style={{ boxShadow: '0 0 0 2px rgba(255,69,85,.65), 0 0 22px rgba(255,69,85,.22)' }} />
+                {dc.showFlag && hong.player.nationality && <div className="absolute -bottom-1 -left-1 overflow-hidden rounded border border-white/85 bg-black/80"><FlagImage code={hong.player.nationality} size={40} className="h-5 w-8 object-cover" /></div>}
               </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-row-reverse">
-              {chung.player.seedNumber && (
-                <span className="font-display font-black px-1.5 py-0.5 rounded shrink-0" style={{ fontSize: 'clamp(10px, 0.85vw, 14px)', background: 'hsl(45 93% 58% / 0.25)', color: 'hsl(45 93% 65%)' }}>
-                  SEED {chung.player.seedNumber}
-                </span>
-              )}
-              {chung.player.playerNumber && (
-                <span className="font-display font-black px-1.5 py-0.5 rounded shrink-0" style={{ fontSize: 'clamp(10px, 0.85vw, 14px)', background: 'rgba(255,255,255,0.1)', color: 'white' }}>
-                  #{chung.player.playerNumber}
-                </span>
-              )}
-            </div>
-            <div className="sb-player-name font-display font-black text-white truncate leading-[1.05] text-right" style={{
-              fontSize: 'clamp(24px, 2.6vw, 48px)',
-              textShadow: '0 2px 6px rgba(0,0,0,0.5)',
-              whiteSpace: nameFormat === 'stacked' ? 'pre-line' : 'nowrap',
-            }}>{broadcastName(chung.player.name, nameFormat)}</div>
-            <div className="flex items-center gap-3 mt-1 min-w-0 flex-row-reverse">
-              {chung.player.club && (
-                <span className="font-display font-black truncate text-right px-3 py-1 rounded-md" style={{
-                  fontSize: 'clamp(11px, 1vw, 18px)',
-                  color: '#f2c14e',
-                  letterSpacing: '0.08em',
-                  border: '2px solid rgba(242,193,78,.75)',
-                  background: 'rgba(0,0,0,.55)',
-                  boxShadow: '0 0 16px rgba(242,193,78,.16), inset 0 0 12px rgba(242,193,78,.05)',
-                }}>CLUB · {chung.player.club}</span>
-              )}
-              {chung.player.nationality && (
-                <span className="font-display font-black tracking-[0.18em] px-2 py-0.5 rounded shrink-0" style={{
-                  fontSize: 'clamp(11px, 0.95vw, 16px)',
-                  background: 'rgba(255,255,255,0.12)',
-                  color: 'white',
-                }}>{chung.player.nationality}</span>
-              )}
-              {dc.showFlag && chung.player.nationality && (
-                <FlagImage code={chung.player.nationality} size={24} className="rounded shrink-0"
-                  style={{ height: '1.1em', width: 'auto', border: '1px solid rgba(255,255,255,0.25)' } as any} />
-              )}
+            ) : dc.showFlag && hong.player.nationality ? (
+              <div className="shrink-0 rounded-lg p-1" style={{ border: '2px solid rgba(255,69,85,.55)', background: 'rgba(255,69,85,.08)', boxShadow: '0 0 22px rgba(255,69,85,.14)' }}><FlagImage code={hong.player.nationality} size={180} className="h-[50px] w-[80px] rounded-md object-cover" /></div>
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="sb-player-name min-w-0 truncate font-display font-black leading-none text-white" style={{ fontSize: 'clamp(24px,2.6vw,48px)', textShadow: '0 2px 8px rgba(0,0,0,.65)' }}>{broadcastName(hong.player.name, nameFormat)}</div>
+              </div>
+              <div className="mt-1 flex items-center gap-3 text-[10px] font-black uppercase tracking-[.13em] text-white/42">
+                {hong.player.club && <span className="truncate text-[#ffd866]/65">{hong.player.club}</span>}
+                {hong.player.playerNumber != null && <span>#{hong.player.playerNumber}</span>}
+                {hong.player.seedNumber != null && <span>SEED {hong.player.seedNumber}</span>}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Hong player bar — RED, always on the left */}
-        <div className="flex-1 flex items-center gap-4 px-6 py-3 min-w-0" style={{ borderBottom: '4px solid hsl(0 72% 51%)', order: 1 }}>
-          <div className="relative shrink-0">
-            <PhotoOrFlag photoUrl={hong.player.photoUrl} nationality={hong.player.nationality}
-              showPhoto={dc.showPhoto} showFlag={dc.showFlag}
-              size={{ height: 'clamp(48px, 4.5vw, 80px)', width: 'clamp(48px, 4.5vw, 80px)', flagWidth: 'clamp(72px, 6.6vw, 120px)' }}
-              className="rounded-md shadow-lg shrink-0 object-cover" />
-            {dc.showFlag && dc.showPhoto && hong.player.photoUrl && hong.player.nationality && (
-              <div className="absolute -bottom-1 -right-1 rounded shadow" style={{ border: '1.5px solid white' }}>
-                <FlagImage code={hong.player.nationality} size={28} className="rounded" style={{ height: '1.3em', width: 'auto' } as any} />
+        {/* CENTER — match identity */}
+        <div className="flex w-[220px] shrink-0 flex-col items-center justify-center border-x border-[#ffd866]/15 px-3 text-center">
+          <div className="font-display text-[8px] font-black tracking-[.24em] text-[#ffd866]/60">MATCH</div>
+          <div className="font-display text-[25px] font-black leading-none text-[#ffd866]">#{state.matchNumber || '---'}</div>
+          <div className="mt-1 font-display text-[8px] font-black tracking-[.18em] text-white/35">ROUND {currentRound} / {config.rounds}</div>
+        </div>
+
+        {/* BLUE — right. Mirror of RED. */}
+        <div className="flex flex-1 min-w-0 flex-row-reverse px-6 py-2.5" style={{ borderBottom: '4px solid hsl(217 91% 55%)' }}>
+          <div className="flex w-full items-center gap-4 min-w-0">
+            {dc.showPhoto && chung.player.photoUrl ? (
+              <div className="relative shrink-0">
+                <img src={chung.player.photoUrl} alt="" className="h-[58px] w-[58px] rounded-lg object-cover" style={{ boxShadow: '0 0 0 2px rgba(62,165,255,.65), 0 0 22px rgba(62,165,255,.22)' }} />
+                {dc.showFlag && chung.player.nationality && <div className="absolute -bottom-1 -right-1 overflow-hidden rounded border border-white/85 bg-black/80"><FlagImage code={chung.player.nationality} size={40} className="h-5 w-8 object-cover" /></div>}
               </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {hong.player.seedNumber && (
-                <span className="font-display font-black px-1.5 py-0.5 rounded shrink-0" style={{ fontSize: 'clamp(10px, 0.85vw, 14px)', background: 'hsl(45 93% 58% / 0.25)', color: 'hsl(45 93% 65%)' }}>
-                  SEED {hong.player.seedNumber}
-                </span>
-              )}
-              {hong.player.playerNumber && (
-                <span className="font-display font-black px-1.5 py-0.5 rounded shrink-0" style={{ fontSize: 'clamp(10px, 0.85vw, 14px)', background: 'rgba(255,255,255,0.1)', color: 'white' }}>
-                  #{hong.player.playerNumber}
-                </span>
-              )}
-            </div>
-            <div className="sb-player-name font-display font-black text-white truncate leading-[1.05]" style={{
-              fontSize: 'clamp(24px, 2.6vw, 48px)',
-              textShadow: '0 2px 6px rgba(0,0,0,0.5)',
-              whiteSpace: nameFormat === 'stacked' ? 'pre-line' : 'nowrap',
-            }}>{broadcastName(hong.player.name, nameFormat)}</div>
-            <div className="flex items-center gap-3 mt-1 min-w-0">
-              {hong.player.club && (
-                <span className="font-display font-black truncate px-3 py-1 rounded-md" style={{
-                  fontSize: 'clamp(11px, 1vw, 18px)',
-                  color: '#f2c14e',
-                  letterSpacing: '0.08em',
-                  border: '2px solid rgba(242,193,78,.75)',
-                  background: 'rgba(0,0,0,.55)',
-                  boxShadow: '0 0 16px rgba(242,193,78,.16), inset 0 0 12px rgba(242,193,78,.05)',
-                }}>CLUB · {hong.player.club}</span>
-              )}
-              {dc.showFlag && hong.player.nationality && (
-                <FlagImage code={hong.player.nationality} size={24} className="rounded shrink-0"
-                  style={{ height: '1.1em', width: 'auto', border: '1px solid rgba(255,255,255,0.25)' } as any} />
-              )}
-              {hong.player.nationality && (
-                <span className="font-display font-black tracking-[0.18em] px-2 py-0.5 rounded shrink-0" style={{
-                  fontSize: 'clamp(11px, 0.95vw, 16px)',
-                  background: 'rgba(255,255,255,0.12)',
-                  color: 'white',
-                }}>{hong.player.nationality}</span>
-              )}
+            ) : dc.showFlag && chung.player.nationality ? (
+              <div className="shrink-0 rounded-lg p-1" style={{ border: '2px solid rgba(62,165,255,.55)', background: 'rgba(62,165,255,.08)', boxShadow: '0 0 22px rgba(62,165,255,.14)' }}><FlagImage code={chung.player.nationality} size={180} className="h-[50px] w-[80px] rounded-md object-cover" /></div>
+            ) : null}
+            <div className="min-w-0 flex-1 text-right">
+              <div className="flex items-center justify-end gap-2 min-w-0">
+                <div className="sb-player-name min-w-0 truncate font-display font-black leading-none text-white" style={{ fontSize: 'clamp(24px,2.6vw,48px)', textShadow: '0 2px 8px rgba(0,0,0,.65)' }}>{broadcastName(chung.player.name, nameFormat)}</div>
+              </div>
+              <div className="mt-1 flex items-center justify-end gap-3 text-[10px] font-black uppercase tracking-[.13em] text-white/42">
+                {chung.player.playerNumber != null && <span>#{chung.player.playerNumber}</span>}
+                {chung.player.seedNumber != null && <span>SEED {chung.player.seedNumber}</span>}
+                {chung.player.club && <span className="truncate text-[#ffd866]/65">{chung.player.club}</span>}
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-
 
       {/* ZONE 2+3: MAIN SCORING AREA (fills remaining space) */}
       <div className="flex-1 flex items-stretch relative z-10">
@@ -3350,14 +3072,14 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
               const bw = displaySettings.roundBoxBorder;
               return (
                 <div key={i} className={`${active ? 'sb-round-active' : ''} rounded-lg flex flex-col items-center justify-center transition-all`} style={{
-                  minWidth: 'clamp(54px, 4.5vw, 88px)',
-                  padding: 'clamp(4px, 0.4vw, 8px) clamp(8px, 0.7vw, 14px)',
+                  minWidth: 'clamp(44px, 3.5vw, 68px)',
+                  padding: 'clamp(3px, 0.3vw, 6px) clamp(6px, 0.5vw, 10px)',
                   background: active ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.3)',
                   border: `${active ? bw + 1 : bw}px solid ${active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.3)'}`,
                   boxShadow: active ? '0 0 22px rgba(255,255,255,0.35), inset 0 0 14px rgba(0,0,0,0.45)' : 'inset 0 0 8px rgba(0,0,0,0.3)',
                 }}>
                   <div className="font-display font-bold text-white/80 tracking-widest" style={{ fontSize: 'clamp(9px, 0.7vw, 12px)' }}>R{i + 1}</div>
-                  <div className="font-display font-black text-white leading-none tabular-nums" style={{ fontSize: 'clamp(20px, 1.8vw, 32px)' }}>{s.total}</div>
+                  <div className="font-display font-black text-white leading-none tabular-nums" style={{ fontSize: 'clamp(16px, 1.45vw, 26px)' }}>{s.total}</div>
                 </div>
               );
             })}
@@ -3368,7 +3090,7 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
             <span className="text-white/70 font-display font-bold tracking-widest" style={{ fontSize: 'clamp(10px, 0.75vw, 13px)' }}>GAM</span>
             {Array.from({ length: Math.min(config.gamjeomLimit, 10) }, (_, i) => (
               <div key={i} className="rounded-full border-2" style={{
-                width: 'clamp(14px, 1.1vw, 22px)', height: 'clamp(14px, 1.1vw, 22px)',
+                width: 'clamp(10px, 0.8vw, 16px)', height: 'clamp(10px, 0.8vw, 16px)',
                 background: i < getGamjeomForRound('chung') ? 'hsl(38 92% 50%)' : 'rgba(255,255,255,0.08)',
                 borderColor: i < getGamjeomForRound('chung') ? 'hsl(38 92% 65%)' : 'rgba(255,255,255,0.2)',
                 boxShadow: i < getGamjeomForRound('chung') ? '0 0 10px hsl(38 92% 50%)' : 'none',
@@ -3479,7 +3201,7 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
                 return (
                   <div key={i} className="flex flex-col items-center gap-0.5">
                     <div className="rounded-full border-2 flex items-center justify-center" style={{
-                      width: 32, height: 32,
+                      width: 38, height: 38,
                       background: c,
                       borderColor: rw ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)',
                       boxShadow: rw ? `0 0 14px ${c}` : 'none',
@@ -3499,13 +3221,13 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
               boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
             }}>
               <div className="flex flex-col items-center justify-center px-3 py-1" style={{ background: 'hsl(217 91% 50%)', minWidth: 'clamp(36px, 3vw, 56px)' }}>
-                <span className="font-display font-black text-white tabular-nums leading-none" style={{ fontSize: 'clamp(20px, 1.8vw, 32px)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{chungRoundWins}</span>
+                <span className="font-display font-black text-white tabular-nums leading-none" style={{ fontSize: 'clamp(25px, 2.1vw, 38px)', textShadow: '0 0 18px rgba(255,216,102,.28)' }}>{chungRoundWins}</span>
               </div>
               <div className="flex items-center justify-center px-1.5" style={{ background: 'hsl(224 35% 8%)' }}>
                 <span className="font-display text-white/45 font-black" style={{ fontSize: 'clamp(14px, 1.1vw, 20px)' }}>:</span>
               </div>
               <div className="flex flex-col items-center justify-center px-3 py-1" style={{ background: 'hsl(0 72% 45%)', minWidth: 'clamp(36px, 3vw, 56px)' }}>
-                <span className="font-display font-black text-white tabular-nums leading-none" style={{ fontSize: 'clamp(20px, 1.8vw, 32px)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{hongRoundWins}</span>
+                <span className="font-display font-black text-white tabular-nums leading-none" style={{ fontSize: 'clamp(25px, 2.1vw, 38px)', textShadow: '0 0 18px rgba(255,216,102,.28)' }}>{hongRoundWins}</span>
               </div>
             </div>
           </div>
@@ -3561,8 +3283,8 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
               const bw = displaySettings.roundBoxBorder;
               return (
                 <div key={i} className={`${active ? 'sb-round-active' : ''} rounded-lg flex flex-col items-center justify-center transition-all`} style={{
-                  minWidth: 'clamp(54px, 4.5vw, 88px)',
-                  padding: 'clamp(4px, 0.4vw, 8px) clamp(8px, 0.7vw, 14px)',
+                  minWidth: 'clamp(44px, 3.5vw, 68px)',
+                  padding: 'clamp(3px, 0.3vw, 6px) clamp(6px, 0.5vw, 10px)',
                   background: active ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.3)',
                   border: `${active ? bw + 1 : bw}px solid ${active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.3)'}`,
                   boxShadow: active ? '0 0 22px rgba(255,255,255,0.35), inset 0 0 14px rgba(0,0,0,0.45)' : 'inset 0 0 8px rgba(0,0,0,0.3)',
@@ -3579,7 +3301,7 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
             <span className="text-white/70 font-display font-bold tracking-widest" style={{ fontSize: 'clamp(10px, 0.75vw, 13px)' }}>GAM</span>
             {Array.from({ length: Math.min(config.gamjeomLimit, 10) }, (_, i) => (
               <div key={i} className="rounded-full border-2" style={{
-                width: 'clamp(14px, 1.1vw, 22px)', height: 'clamp(14px, 1.1vw, 22px)',
+                width: 'clamp(10px, 0.8vw, 16px)', height: 'clamp(10px, 0.8vw, 16px)',
                 background: i < getGamjeomForRound('hong') ? 'hsl(38 92% 50%)' : 'rgba(255,255,255,0.08)',
                 borderColor: i < getGamjeomForRound('hong') ? 'hsl(38 92% 65%)' : 'rgba(255,255,255,0.2)',
                 boxShadow: i < getGamjeomForRound('hong') ? '0 0 10px hsl(38 92% 50%)' : 'none',
@@ -3633,4 +3355,81 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
   );
 }
 
-export default function PublicScoreboard(props: {isMiniPreview?:boolean}={}){useBroadcastViewport(!props.isMiniPreview);const displayId=React.useMemo(()=>{try{return Number(new URLSearchParams(window.location.search).get('displayId'))||undefined}catch{return undefined}},[]);const[mode,setMode]=useState(()=>getBroadcastDisplayConfig(displayId).mode);useEffect(()=>{const sync=()=>setMode(getBroadcastDisplayConfig(displayId).mode);window.addEventListener('storage',sync);window.addEventListener('wab-display-config-changed',sync);const id=window.setInterval(sync,500);return()=>{window.removeEventListener('storage',sync);window.removeEventListener('wab-display-config-changed',sync);clearInterval(id);};},[displayId]);if(!props.isMiniPreview&&isPublicDisplayWindow()&&(mode==='mat_announcer'||mode==='upcoming'))return <MatBroadcastScreen displayId={displayId} mode={mode}/>;return <ScoreboardView {...props}/>;}
+class PublicDisplayErrorBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: Error) {
+    console.error('[PUBLIC DISPLAY] renderer fallback:', error);
+    window.electronAPI?.preparePublicDisplay?.({ready:false,canvas:{width:1920,height:1080},animation:'DISPLAY ERROR'}).catch(()=>{});
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return <div dir="ltr" className="fixed inset-0 bg-black text-white overflow-hidden flex items-center justify-center">
+      <div className="text-center px-8"><div className="font-display text-[12px] tracking-[.45em] text-yellow-300">WAB-TKD</div><div className="mt-4 font-display text-5xl font-black">STANDBY</div><div className="mt-3 text-xs tracking-[.25em] text-white/45">PUBLIC DISPLAY FALLBACK · DISPLAY ERROR</div></div>
+    </div>;
+  }
+}
+function DisplayGuides({ enabled, testMode, diagnostics }: { enabled: boolean; testMode: boolean; diagnostics: { scale: string; animation: string; ready: boolean; safe: boolean; overlaps: number; outOfBounds: number } }) {
+  if (!enabled && !testMode) return null;
+  return <>{(enabled || testMode) && <div className={testMode ? "wab-display-test-pattern" : "wab-display-guides"} aria-hidden="true">
+    {testMode && <><div className="test-16x9"/><div className="test-safe"/><div className="test-center"/><div className="test-center-h"/><div className="test-zone red"/><div className="test-zone match"/><div className="test-zone blue"/><div className="test-label">MASTER 1920×1080 · DISPLAY TEST</div></>}
+    {enabled && !testMode && <><div className="wab-guide-label">MASTER 1920×1080 · 16:9</div><div className="wab-guide-safe"/><div className="wab-guide-center-v"/><div className="wab-guide-center-h"/><div className="wab-guide-zone red">RED AREA</div><div className="wab-guide-zone match">MATCH AREA</div><div className="wab-guide-zone blue">BLUE AREA</div></>}
+  </div>}
+  {enabled && <div className="wab-display-diagnostics" aria-live="polite">
+    <div><b>CANVAS</b> 1920×1080</div><div><b>SCALE</b> {diagnostics.scale}</div><div><b>ANIMATION</b> {diagnostics.animation}</div><div><b>STATUS</b> <span className={diagnostics.ready?'ok':'warn'}>{diagnostics.ready?'READY':'PREPARING'}</span></div><div><b>SAFE AREA</b> <span className={diagnostics.safe?'ok':'warn'}>{diagnostics.safe?'OK':'OUT'}</span></div><div><b>OVERLAPS</b> {diagnostics.overlaps}</div><div><b>OUT OF BOUNDS</b> {diagnostics.outOfBounds}</div>
+  </div>}
+  </>;
+}
+
+export default function PublicScoreboard(props: {isMiniPreview?:boolean}={}){
+  useBroadcastViewport(!props.isMiniPreview);
+  const displayId=React.useMemo(()=>{try{return Number(new URLSearchParams(window.location.search).get('displayId'))||undefined}catch{return undefined}},[]);
+  useEffect(()=>{
+    if(props.isMiniPreview || !isPublicDisplayWindow()) return;
+    let cancelled=false;
+    const prepare=()=>{
+      if(cancelled) return;
+      const width=Math.max(1,Math.round(window.innerWidth));
+      const height=Math.max(1,Math.round(window.innerHeight));
+      // READY means the 1920×1080 master canvas is mounted and renderable.
+      // It must NOT require the physical CSS viewport to be exactly 1920×1080:
+      // 4K and wireless displays are intentionally normalized/scaled to the
+      // same master canvas.
+      const renderable=width>0 && height>0 && Boolean(document.getElementById('root'));
+      document.documentElement.dataset.wabDisplayPrepared=renderable?'true':'false';
+      window.electronAPI?.preparePublicDisplay?.({ready:renderable,canvas:{width:1920,height:1080},animation:'PUBLIC_DISPLAY'}).catch(()=>{});
+    };
+    const id=window.requestAnimationFrame(prepare);
+    window.addEventListener('resize',prepare,{passive:true});
+    return()=>{cancelled=true;window.cancelAnimationFrame(id);window.removeEventListener('resize',prepare);};
+  },[props.isMiniPreview]);
+  useEffect(()=>{
+    if(props.isMiniPreview || !isPublicDisplayWindow()) return;
+    const send=()=>window.electronAPI?.publicDisplayHeartbeat?.({displayId,ready:document.documentElement.dataset.wabDisplayPrepared==='true',animation:'PUBLIC_DISPLAY'});
+    send(); const id=window.setInterval(send,1000);
+    return()=>window.clearInterval(id);
+  },[props.isMiniPreview,displayId]);
+  const[emergency,setEmergency]=useState(false);
+  useEffect(()=>{
+    if(props.isMiniPreview || !isPublicDisplayWindow()) return;
+    return window.electronAPI?.onPublicDisplayEmergency?.(()=>setEmergency(true));
+  },[props.isMiniPreview]);
+  const[mode,setMode]=useState(()=>getBroadcastDisplayConfig(displayId).mode);useEffect(()=>{const sync=()=>setMode(getBroadcastDisplayConfig(displayId).mode);window.addEventListener('storage',sync);window.addEventListener('wab-display-config-changed',sync);const id=window.setInterval(sync,500);return()=>{window.removeEventListener('storage',sync);window.removeEventListener('wab-display-config-changed',sync);clearInterval(id);};},[displayId]);
+  const [guides,setGuides]=useState(false);
+  const [testMode,setTestMode]=useState(false);
+  const [diagnostics,setDiagnostics]=useState({scale:'1.000',animation:'PUBLIC_DISPLAY',ready:false,safe:true,overlaps:0,outOfBounds:0});
+  useEffect(()=>{if(typeof window==='undefined')return;const sync=()=>setGuides(localStorage.getItem('wab-display-guides')==='1');sync();const api=window.electronAPI;void api?.getDisplayOverlay?.().then(v=>{localStorage.setItem('wab-display-guides',v.guides?'1':'0');setGuides(v.guides);});const off=api?.onDisplayOverlayChanged?.(v=>{localStorage.setItem('wab-display-guides',v.guides?'1':'0');setGuides(v.guides);setTestMode(v.test);});window.addEventListener('storage',sync);return()=>{off?.();window.removeEventListener('storage',sync);};},[]);
+  useEffect(()=>{if(typeof window==='undefined')return;const sync=()=>setTestMode(localStorage.getItem('wab-display-test-mode')==='1');sync();window.addEventListener('storage',sync);window.addEventListener('wab-display-test-mode-changed',sync);return()=>{window.removeEventListener('storage',sync);window.removeEventListener('wab-display-test-mode-changed',sync);};},[]);
+  useEffect(()=>{
+    const inspect=()=>{
+      const root=document.documentElement; const width=Math.max(1,window.innerWidth),height=Math.max(1,window.innerHeight);
+      const scale=Number(root.dataset.wabBroadcastFit||1); const nodes=Array.from(document.querySelectorAll('[data-wab-layer-root]')) as HTMLElement[];
+      let out=0; for(const el of nodes){const r=el.getBoundingClientRect(); if(r.right<0||r.bottom<0||r.left>width||r.top>height) out++;}
+      let overlaps=0; for(let i=0;i<nodes.length;i++){for(let j=i+1;j<nodes.length;j++){const a=nodes[i].getBoundingClientRect(),b=nodes[j].getBoundingClientRect(); if(a.width>4&&a.height>4&&b.width>4&&b.height>4&&a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top) overlaps++;}}
+      setDiagnostics({scale:scale.toFixed(3),animation:document.querySelector('[data-wab-layer-root]')?.getAttribute('data-wab-layer-root')||'PUBLIC_DISPLAY',ready:document.documentElement.dataset.wabDisplayPrepared==='true',safe:out===0,overlaps,outOfBounds:out});
+    };
+    inspect(); const id=window.setInterval(inspect,500); window.addEventListener('resize',inspect); return()=>{clearInterval(id);window.removeEventListener('resize',inspect);};
+  },[]);
+  if(emergency && !props.isMiniPreview) return <div dir="ltr" className="fixed inset-0 bg-black text-white overflow-hidden flex items-center justify-center"><div className="text-center"><div className="font-display text-6xl font-black">STANDBY</div><div className="mt-3 text-sm tracking-[.3em] text-white/45">PUBLIC DISPLAY EMERGENCY FALLBACK</div></div></div>;
+  const child=(!props.isMiniPreview&&isPublicDisplayWindow()&&(mode==='mat_announcer'||mode==='upcoming'))?<MatBroadcastScreen displayId={displayId} mode={mode}/>:<ScoreboardView {...props}/>;
+  return <PublicDisplayErrorBoundary><>{child}<DisplayGuides enabled={guides&&(props.isMiniPreview||isPublicDisplayWindow())} testMode={testMode&&(props.isMiniPreview||isPublicDisplayWindow())} diagnostics={diagnostics}/></></PublicDisplayErrorBoundary>;}

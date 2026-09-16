@@ -82,10 +82,15 @@ function mapVisualState(state: AppMatchState): VisualState {
   const chung = state.teamCallStatus?.chung ?? 'idle';
   const hong = state.teamCallStatus?.hong ?? 'idle';
   const stage = state.autoCallSequence?.stage;
+  // READY is an explicit state and must win over the GREETING stage.
+  // JUMP_TEAM_CALL_STAGE('ready') intentionally keeps the auto-sequence
+  // metadata at GREETING, so checking the statuses first prevents READY from
+  // being painted as WAITING/CONFIRM on the public/second display.
+  if (chung === 'ready' && hong === 'ready') return 'ready';
   if (chung === 'called' && hong === 'called') {
-    // Both corners confirmed. Still on the GREETING stop (or the sequence
-    // isn't running at all, e.g. a manual call) -> "confirm"; anything past
-    // that -> "ready" for Shijak.
+    // Both corners confirmed. Stay on the explicit GREETING/confirmation stop
+    // until the Main Referee advances it; once the sequence is complete the
+    // centre switches to READY for Shijak.
     if (state.autoCallSequence?.stage === 'DONE') return 'ready';
     if (!state.autoCallSequence?.active || stage === 'GREETING') return 'confirm';
     return 'ready';
@@ -145,7 +150,7 @@ export default function LiveTeamCallBroadcast({ state, dispatch, isMiniPreview =
 
 
   return (
-    <div dir="ltr" className={`team-call-fullscreen-shell${isMiniPreview ? " team-call-mini-preview" : ""}`} data-team-call-animation="true">
+    <div dir="ltr" className={`team-call-fullscreen-shell${isMiniPreview ? " team-call-mini-preview" : ""}`} data-team-call-animation="true" data-wab-broadcast-root="team-call">
       <ArenaBackground />
       <main className="broadcast broadcast-animation-fullscreen" data-broadcast-animation="true">
         <div className="team-call-event-meta" data-wab-layer-id="team-call-event-meta">

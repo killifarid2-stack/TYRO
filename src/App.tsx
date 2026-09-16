@@ -50,7 +50,6 @@ import QATestCenterPage from "./pages/QATestCenterPage";
 import WinnerResultEditorPage from "./pages/WinnerResultEditorPage";
 import TournamentDashboardPage from "./pages/TournamentDashboardPage";
 import AwardAnimationScreenPage from "./pages/AwardAnimationScreenPage";
-import BroadcastDesignStudioPage from "./pages/BroadcastDesignStudioPage";
 import FlagsSettingsPage from "./pages/FlagsSettingsPage";
 import { syncTournamentArchiveIndexFromCloud, syncTournamentArchiveIndexToCloud } from "@/lib/tournament-archive-index";
 import { syncAuditLogFromCloud } from "@/lib/audit-log";
@@ -151,7 +150,6 @@ function AppShell() {
                 <Route path="/admin" element={<ProtectedRoute path="/admin"><AdminPanel /></ProtectedRoute>} />
                 <Route path="/operator" element={<OperatorScreen />} />
                 <Route path="/scoreboard" element={<PublicScoreboard />} />
-                <Route path="/broadcast-design" element={<BroadcastDesignStudioPage />} />
                 <Route path="/judge" element={<JudgePage />} />
                 <Route path="/tournament" element={<ProtectedRoute path="/tournament"><TournamentManager /></ProtectedRoute>} />
                 <Route path="/club-points" element={<ProtectedRoute path="/club-points"><ClubPointsPage /></ProtectedRoute>} />

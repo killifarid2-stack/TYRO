@@ -16,7 +16,6 @@ import TournamentPicker from './TournamentPicker';
 import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
 import { getRotationEntryForRound } from '@/lib/match-engine';
-import { getWinnerAnimationSettings, setWinnerAnimationSettings } from '@/lib/winner-animation-settings';
 import { MatControlMode, getMatControlMode, setMatControlMode, getMatCount, setMatCount, getAssignedMatNumber, setAssignedMatNumber, getMatDeviceName, setMatDeviceName } from '@/lib/mat-status';
 
 const InputField = ({ label, value, onChange, type = 'text', placeholder }: {
@@ -764,67 +763,17 @@ export default function AdminPanel() {
             })}
           </div>
 
-          {/* Individual 1v1 Winner Result cinematic controls. These settings are
-              session-level and are also mirrored to localStorage so a second
-              public display opened/reloaded later keeps the same choice. */}
-          {(() => {
-            const dc = { ...DEFAULT_DISPLAY_CONFIG, ...(state.displayConfig || {}) };
-            const saved = getWinnerAnimationSettings();
-            const duration = Number(dc.winnerAnimationDurationSeconds ?? saved.durationSeconds ?? 3);
-            const setWinner = (patch: Partial<DisplayConfig>) => {
-              const nextPatch = patch.winnerAnimationEnabled !== undefined
-                ? { ...patch, winnerAnimationEnabled: patch.winnerAnimationEnabled }
-                : patch;
-              const winnerPatch = {
-                enabled: nextPatch.winnerAnimationEnabled ?? dc.winnerAnimationEnabled,
-                durationSeconds: nextPatch.winnerAnimationDurationSeconds ?? duration,
-              };
-              setWinnerAnimationSettings(winnerPatch);
-              dispatch({ type: 'SET_DISPLAY_CONFIG', displayConfig: {
-                winnerAnimationEnabled: winnerPatch.enabled,
-                winnerAnimationDurationSeconds: winnerPatch.durationSeconds,
-              }});
-            };
-            return (
-              <div className="mt-4 rounded-xl border border-gold/20 bg-black/20 p-3">
-                <div className="mb-1 font-display text-xs font-black uppercase tracking-[.18em] text-gold">{t('winnerAnimationSettingsTitle')}</div>
-                <p className="mb-3 text-[10px] text-muted-foreground">{t('winnerAnimationSettingsSubtitle')}</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 p-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={dc.winnerAnimationEnabled !== false}
-                      onChange={e => setWinner({ winnerAnimationEnabled: e.target.checked })}
-                      className="w-4 h-4 accent-primary"
-                    />
-                    <span className="text-xs font-semibold text-foreground">{t('winnerAnimationEnabledToggle')}</span>
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/40 p-2">
-                    <span className="text-xs font-semibold text-foreground">{t('winnerAnimationDurationLabel')}</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={10}
-                        step={0.5}
-                        value={Number.isFinite(duration) ? duration : 3}
-                        onChange={e => {
-                          const v = Math.min(10, Math.max(0, Number(e.target.value) || 0));
-                          setWinner({ winnerAnimationDurationSeconds: v });
-                        }}
-                        disabled={dc.winnerAnimationEnabled === false}
-                        className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-                      />
-                      <span className="text-[10px] text-muted-foreground">{t('secondsLabel')}</span>
-                    </div>
-                  </label>
-                </div>
-                <div className="mt-2 text-[10px] text-white/45">
-                  {t('winnerAnimationDirectResultHint')}
-                </div>
-              </div>
-            );
-          })()}
+          {/* Individual 1v1 winner display is now a static information frame.
+              The legacy intro/hold animation controls are intentionally removed
+              so the operator cannot accidentally re-enable the retired sequence. */}
+          <div className="mt-4 rounded-xl border border-gold/20 bg-black/20 p-3">
+            <div className="mb-1 font-display text-xs font-black uppercase tracking-[.18em] text-gold">INDIVIDUAL WINNER DISPLAY</div>
+            <p className="text-[10px] text-muted-foreground">Static 1920×1080 winner information. No legacy intro, countdown, or result-hold animation is inserted before the official winner screen.</p>
+            <div className="mt-3 flex items-center justify-between rounded-lg border border-emerald-400/20 bg-emerald-400/[.05] px-3 py-2">
+              <span className="text-xs font-semibold text-foreground">MODE</span>
+              <span className="text-[11px] font-black tracking-[.16em] text-emerald-300">STATIC · OFFICIAL RESULT</span>
+            </div>
+          </div>
         </div>
 
         {/* Call Screen Display — show/hide toggles for the "استدعاء" cinematic

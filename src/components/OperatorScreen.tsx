@@ -28,7 +28,7 @@ import {
   Play, Pause, SkipForward, RotateCcw, Video, AlertTriangle, Maximize, Minimize,
   Stethoscope, Minus, Zap, Hand, Target, CircleDot, Brain, ArrowLeftRight,
   Link2, QrCode, FileText, Shield, Monitor, Keyboard, Clock, FastForward,
-  MinusCircle, PlusCircle, Settings2, Search, Check, X, FlaskConical, Eye, EyeOff, ClipboardList, Bell, Wifi, WifiOff, Trophy, ListOrdered, Volume2, VolumeX, UserCheck, Film, CheckCircle2, Users, Palette
+  MinusCircle, PlusCircle, Settings2, Search, Check, X, FlaskConical, Eye, EyeOff, ClipboardList, Bell, Wifi, WifiOff, Trophy, ListOrdered, Volume2, VolumeX, UserCheck, Film, CheckCircle2, Users
 } from 'lucide-react';
 import ResultView from './ResultView';
 import MatchReplay from './MatchReplay';
@@ -43,7 +43,6 @@ import wooseGirokArmRed from '@/assets/judge-decision/red-arm.png';
 import koRedLogo from '@/assets/ko/ko-red.png';
 import koBlueLogo from '@/assets/ko/ko-blue.png';
 import MainRefereeCallPanel from './MainRefereeCallPanel';
-import BroadcastDesignQuickControls from './BroadcastDesignQuickControls';
 
 
 import { PunchIcon, TrunkKickIcon, HeadKickIcon, SpinKickIcon } from './ScoreIcons';
@@ -941,7 +940,13 @@ export default function OperatorScreen() {
       const updatedBd = advance(t?.bracket_data);
       if (updatedBd) await supabase.from('tournaments').update({ bracket_data: updatedBd }).eq('id', tournamentId);
       if (state.config.competitionMode === 'par_equipe') syncParEquipeTournamentArchive(tournamentId);
-    } catch {
+    } catch (err) {
+      // Same visibility gap as persistSavedMatch: if this Supabase round trip
+      // fails, the winner never gets carried into the next bracket slot in
+      // the shared tournament record, even though the match itself saved
+      // fine locally — which looks exactly like "match saved but tournament
+      // didn't advance". Logged instead of silently falling back.
+      console.error('[WAB-TKD] advanceTournamentAfterSave: failed to advance bracket in Supabase, falling back to local', { tournamentId, bracketMatchId: state.bracketMatchId, err });
       const rec = loadTournamentLocal(tournamentId);
       if (rec) {
         const updatedBd = advance(rec.bracket_data);
@@ -1137,6 +1142,10 @@ export default function OperatorScreen() {
   }, [state.status, state.id]);
 
   const handleStart = () => {
+    // After the final Par Équipe round the official rest still runs before
+    // the team winner is revealed. Never let the generic Start/Resume button
+    // bypass that final reveal boundary.
+    if (state.awaitingTeamReveal) return;
     if (state.status === 'waiting') {
       // Shijak starts the match directly — no per-match intro. The intro
       // video is for app launch only (SplashScreen), not every Shijak press.
@@ -1253,23 +1262,20 @@ export default function OperatorScreen() {
   };
 
   const handleKomz = (player: PlayerColor, level: 1 | 2) => {
-    const opponent: PlayerColor = player === 'chung' ? 'hong' : 'chung';
-    dispatch({ type: 'ADD_SCORE', player, scoreType: 'gamjeom' });
     // Critical last-10-seconds rule is shared by BOTH 1v1 and Par Équipe.
     // A normal warning remains administrative (0 live-score points).
     // For a Gam-jeom decision, the configured critical value is applied only
     // when the clock is actually inside the final 10 seconds.
     const critical = isLast10Seconds && (state.config.last10SecondsRuleEnabled ?? true);
     const configuredCritical = state.config.last10SecondsGamjeomPoints ?? 2;
-    const targetTotal = critical && (state.config.penaltyScheme ?? 'binary') === 'binary'
+    // LAST 10s · ×2 is still ONE warning/gam-jeom in the warning field.
+    // The only difference is that this single warning awards +2 to the opponent.
+    // The engine counts one warning slot, so the final configured slot can
+    // lose the current round without creating two warning entries.
+    const gamjeomPoints = critical && (state.config.penaltyScheme ?? 'binary') === 'binary'
       ? configuredCritical
       : 1;
-    const extra = Math.max(0, targetTotal - 1);
-    if (extra > 0) {
-      for (let i = 0; i < extra; i++) {
-        dispatch({ type: 'ADD_SCORE', player: opponent, scoreType: 'punch' });
-      }
-    }
+    dispatch({ type: 'ADD_SCORE', player, scoreType: 'gamjeom', gamjeomPointsOverride: gamjeomPoints });
     sounds.gamjeom();
     setShowKomz(null);
   };
@@ -1829,17 +1835,6 @@ export default function OperatorScreen() {
               className="p-1.5 rounded-lg border-2 border-[hsl(var(--success))]/60 bg-[hsl(var(--success))]/20 text-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/30 transition-colors" title={t('openScoreboardTitle')}>
               <Monitor size={14} />
             </button>
-            <button onClick={() => {
-              const a = String(state.animationController?.activeAnimation || '').toUpperCase();
-              const map: Record<string,string> = { TEAM_CALL:'team-call', SINGLE_PLAYER_CALL:'player-call', PLAYER_CALL:'player-call', PLAYER_CHANGE:'player-change', KO:'ko', DOCTOR:'doctor', KYESHI:'kyeshi', WOO_SE_GIROK:'woose-girok', 'WOO-SE-GIROK':'woose-girok', MATCH_RESULT:'match-result' };
-              const animationId = map[a] || (state.status === 'finished' && state.result ? 'winner' : 'team-call');
-              const url = `${window.location.origin}/broadcast-design?animationId=${animationId}`;
-              const opened = window.open(url, 'WAB-TKD-Broadcast-Design-Studio', 'width=1600,height=1000,resizable=yes,scrollbars=yes');
-              if (!opened) window.location.assign(url);
-            }}
-              className="p-1.5 rounded-lg border-2 border-[hsl(var(--gold))]/55 bg-[hsl(var(--gold))]/10 text-[hsl(var(--gold))] hover:bg-[hsl(var(--gold))]/20 transition-colors" title="Broadcast Design Studio — تحرير الأنيميشن الحالي">
-              <Palette size={14} />
-            </button>
             <button onClick={() => setShowMiniPreview(s => { const next = !s; try { localStorage.setItem('wab_referee_live_preview_open', next ? '1' : '0'); } catch {} return next; })}
               className={`p-1.5 rounded-lg transition-colors ${
                 showMiniPreview
@@ -1996,6 +1991,37 @@ export default function OperatorScreen() {
                   without forcing the box to grow. */}
               {girokOpen && <div className="relative mt-2 min-h-[380px] overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_50%,rgba(255,190,30,.12),transparent_34%),linear-gradient(180deg,#090d14_0%,#030509_100%)] p-5"><div className="absolute inset-0 pointer-events-none"><div className="girok-sweep girok-sweep-one"/><div className="girok-sweep girok-sweep-two"/><div className="girok-particle p1"/><div className="girok-particle p2"/><div className="girok-particle p3"/></div><img src={wooseGirokArms} alt="WOO-SE-GIROK referee arms" className="absolute left-1/2 bottom-0 -translate-x-1/2 w-auto h-auto max-w-[90%] max-h-[220px] select-none pointer-events-none girok-arms-image"/><div className="relative z-10 text-center girok-center-content"><div className="text-[hsl(var(--gold))] text-[11px] font-black tracking-[.5em]">우세기록</div><div className="girok-gold-title font-display text-4xl md:text-5xl girok-title-between-arms">WOO-SE-GIROK</div>{girokStage===0 && <button onClick={startGirokCountdown} className="mt-6 px-8 py-4 rounded-xl bg-white text-black font-display font-black">START COUNTDOWN</button>}{girokCounting && girokStage>=1 && girokStage<=3 && <div key={girokStage} className="mt-6"><div className="girok-count-number">{girokStage}</div><div className="girok-count-name">{[['',''],['1','HANA — 하나'],['2','DUL — 둘'],['3','SET — 셋']][girokStage][1]}</div></div>}{!girokCounting && girokStage===4 && <><div className="mt-6 text-xs tracking-[.3em] text-[hsl(var(--gold))] font-black">THREE REFEREES</div><div className="grid grid-cols-3 gap-3 mt-4"><JudgeCard id="left" role="SIDE JUDGE"/><JudgeCard id="center" role="CENTER / MAT REFEREE"/><JudgeCard id="right" role="SIDE JUDGE"/></div>{allVoted && <div className={`mt-4 girok-decision-frame relative overflow-hidden p-5 text-center ${majority==='chung'?'is-chung':'is-hong'}`}><img src={majority==='chung'?wooseGirokArmBlue:wooseGirokArmRed} alt="" className="girok-decision-arm"/><div className="relative z-10"><div className="girok-gold-title font-display text-lg md:text-xl">MAJORITY DECISION</div><div className={`mt-3 text-4xl md:text-5xl font-display font-black ${majority==='chung'?'text-[hsl(var(--chung))]':'text-[hsl(var(--hong))]'}`}>{majority==='chung'?'BLUE':'RED'} WINS</div><div className="mt-1 text-2xl font-display font-black text-white/80">{blueVotes} — {redVotes}</div><button onClick={() => { sounds.winner(); dispatch({type:'RESOLVE_DRAW_ROUND',winner:majority!,decisionType:'WOOSE_GIROK',votes}); }} className="mt-5 px-8 py-3 rounded-xl bg-[hsl(var(--gold))] text-black font-display font-black shadow-[0_0_30px_hsl(var(--gold)/.35)]">CENTER REFEREE CONFIRM FINAL DECISION</button></div></div>}</>}</div></div>}
             </div></div></div>;
+        })()}
+
+        {state.pendingRoundDecision && !state.result && state.config.competitionMode !== 'par_equipe' && !aiTiebreakerOpen && !girokOpen && (() => {
+          const tieRound = state.roundWinners.find(r => r.round === state.currentRound);
+          const details = tieRound?.tiebreakDetails;
+          const recommended = details?.aiWinner || (state.aiRecommendation === 'chung' ? 'chung' : state.aiRecommendation === 'hong' ? 'hong' : undefined);
+          const confidence = details?.aiConfidence ?? state.aiConfidence ?? 0;
+          return (
+            <div className="panel mt-3 w-full border-2 border-[hsl(var(--gold))]/50 bg-[hsl(var(--gold))]/[.06] p-4">
+              <div className="text-center">
+                <div className="font-display text-sm font-black tracking-[.2em] text-[hsl(var(--gold))]">ROUND {state.currentRound} · TIE — DECISION REQUIRED</div>
+                <div className="mt-1 text-[10px] text-white/55">اختر الفائز اعتمادًا على الإحصائيات، أو افتح WOO-SE-GIROK لاتخاذ قرار الحكام.</div>
+              </div>
+              {recommended && (
+                <div className="mt-3 flex items-center justify-center gap-3 rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+                  <Brain size={15} className="text-[hsl(var(--gold))]" />
+                  <span className="text-[10px] font-black tracking-[.15em] text-white/60">AI / STATS RECOMMENDATION</span>
+                  <span className={`text-lg font-display font-black ${recommended === 'chung' ? 'text-[hsl(var(--chung))]' : 'text-[hsl(var(--hong))]'}`}>{recommended === 'chung' ? 'BLUE' : 'RED'}</span>
+                  <span className="text-[10px] font-black text-white/45">{confidence}%</span>
+                </div>
+              )}
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                <button onClick={() => { sounds.winner(); dispatch({ type: 'RESOLVE_DRAW_ROUND', winner: 'chung', decisionType: 'AI_RECOMMENDATION', votes: state.roundTieReview?.votes }); }}
+                  className="py-3 rounded-xl border-2 border-[hsl(var(--chung))] bg-[hsl(var(--chung))]/15 text-[hsl(var(--chung))] font-display font-black hover:bg-[hsl(var(--chung))]/25">BLUE — ROUND WINNER</button>
+                <button onClick={() => { sounds.winner(); dispatch({ type: 'RESOLVE_DRAW_ROUND', winner: 'hong', decisionType: 'AI_RECOMMENDATION', votes: state.roundTieReview?.votes }); }}
+                  className="py-3 rounded-xl border-2 border-[hsl(var(--hong))] bg-[hsl(var(--hong))]/15 text-[hsl(var(--hong))] font-display font-black hover:bg-[hsl(var(--hong))]/25">RED — ROUND WINNER</button>
+                <button disabled={state.config.roundTieWooSeGirokEnabled === false} onClick={openGirokSummons}
+                  className="py-3 rounded-xl bg-[hsl(var(--gold))] text-black font-display font-black disabled:opacity-30">⚖ WOO-SE-GIROK</button>
+              </div>
+            </div>
+          );
         })()}
 
         {/* Substitute Player (Par Équipe) — REQUEST_SUBSTITUTION already
@@ -2612,7 +2638,7 @@ export default function OperatorScreen() {
           )}
 
           <div className="flex items-center gap-3 mt-3">
-            {(state.status === 'waiting' || state.status === 'paused') && (
+            {(state.status === 'waiting' || state.status === 'paused') && !state.awaitingTeamReveal && (
               <button onClick={handleStart} className="flex items-center gap-1 px-4 py-2 rounded-lg border-2 border-[hsl(var(--success))]/60 bg-[hsl(var(--success))]/20 text-[hsl(var(--success))] font-semibold text-sm">
                 <Play size={16} /> {state.status === 'waiting' ? t('shijak') : state.awaitingRoundStart ? `${t('startRound')} ${state.currentRound + 1}` : t('resume')}
               </button>
@@ -2686,7 +2712,7 @@ export default function OperatorScreen() {
             {state.pendingRoundDecision && !state.result && state.config.competitionMode !== 'par_equipe' && (
               <button onClick={() => { setManualAiAnalysis(null); setAiTiebreakerOpen(true); }}
                 className="flex items-center gap-1 px-4 py-2 rounded-lg bg-[hsl(var(--gold))] text-[#050505] font-display font-black text-sm border-2 border-[hsl(var(--gold))] shadow-[0_0_22px_hsl(var(--gold)/.45)] hover:brightness-110">
-                <Brain size={15} /> AI TIEBREAKER
+                <Brain size={15} /> AI TIEBREAKER / STATS
               </button>
             )}
             {state.status === 'rest' && state.roundCorrectionReview && state.timeRemaining === 0 && (
@@ -2750,7 +2776,7 @@ export default function OperatorScreen() {
                       })}
                       <button onClick={() => addCorrectionScore(player,'gamjeom')} className="rounded-lg border border-[hsl(var(--warning))]/40 bg-[hsl(var(--warning))]/10 px-2 py-2 text-[10px] font-black text-[hsl(var(--warning))]">GAM-JEOM +1</button>
                       <button onClick={() => addCorrectionWarning(player,1,false)} className="rounded-lg border border-[hsl(var(--warning))]/40 bg-[hsl(var(--warning))]/10 px-2 py-2 text-[10px] font-black text-[hsl(var(--warning))]">إنذار ×1</button>
-                      <button onClick={() => addCorrectionWarning(player,2,true)} className="rounded-lg border border-[hsl(var(--destructive))]/40 bg-[hsl(var(--destructive))]/10 px-2 py-2 text-[10px] font-black text-[hsl(var(--destructive))]">إنذار ×2 · آخر 10ث</button>
+                      <button onClick={() => addCorrectionWarning(player,1,true)} className="rounded-lg border border-[hsl(var(--destructive))]/40 bg-[hsl(var(--destructive))]/10 px-2 py-2 text-[10px] font-black text-[hsl(var(--destructive))]">إنذار ×2 · آخر 10ث</button>
                     </div>
                   </div>;
                 })}
@@ -2874,7 +2900,7 @@ export default function OperatorScreen() {
           )}
 
           <div className="flex gap-2 mt-2 flex-wrap justify-center">
-            {state.status !== 'finished' && state.status !== 'waiting' && (
+            {state.status === 'fighting' && (
               <button onClick={() => dispatch({ type: 'END_ROUND' })}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border-2 border-[hsl(var(--primary))]/60 bg-[hsl(var(--primary))]/20 text-[hsl(var(--primary))] font-semibold text-xs">
                 <SkipForward size={12} /> {t('endRound')}
@@ -3223,12 +3249,6 @@ export default function OperatorScreen() {
               <button onClick={handleSaveMatch} disabled={savingMatch} className="flex-1 py-2.5 rounded-lg bg-[hsl(var(--gold))] text-black font-black disabled:opacity-50">{savingMatch ? (lang === 'ar' ? 'جارٍ الحفظ…' : lang === 'fr' ? 'ENREGISTREMENT…' : 'SAVING…') : (lang === 'ar' ? 'حفظ النتيجة' : lang === 'fr' ? 'ENREGISTRER LE RÉSULTAT' : 'SAVE RESULT')}</button>
             </div>
           </div>
-        </div>
-      )}
-
-      {mainRefereeToolsOpen && (
-        <div className="fixed bottom-4 right-4 z-[120] w-[360px] max-w-[calc(100vw-2rem)]">
-          <BroadcastDesignQuickControls state={state} />
         </div>
       )}
 

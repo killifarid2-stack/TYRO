@@ -271,3 +271,32 @@
   content:""; position:absolute; inset:0; pointer-events:none; z-index:-1;
   background: radial-gradient(circle at 50% 45%, rgba(255,255,255,.025), transparent 42%);
 }
+
+
+/* WAB-TKD final visual correction: WOO-SE-GIROK title is more prominent,
+   while decision labels are lifted above the judge-arm artwork so BLUE/RED
+   never sits directly on the forearm. */
+.girok-public-scene .girok-gold-title{
+  font-size:clamp(3.25rem,6vw,6.5rem)!important;
+  line-height:.95!important;
+  letter-spacing:.12em!important;
+  transform:translateY(-10px);
+}
+.girok-public-judge .relative.z-10{
+  transform:translateY(-12px);
+}
+.girok-public-judge .relative.z-10 > .text-lg,
+.girok-public-judge .relative.z-10 > .text-2xl{
+  transform:translateY(-8px);
+  position:relative;
+  z-index:20;
+}
+.girok-final-decision-panel .relative.z-10{
+  transform:translateY(-8px);
+}
+.girok-final-decision-panel .relative.z-10 > div:nth-child(2){
+  transform:translateY(-6px);
+}
+@media(max-width:900px){
+  .girok-public-scene .girok-gold-title{font-size:clamp(2.7rem,8vw,5rem)!important;}
+}

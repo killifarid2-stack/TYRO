@@ -96,36 +96,10 @@ export default function MainRefereeCallPanel({ state, dispatch, modal = false, o
     dispatch({ type: 'SET_PLAYER_CALL_PREVIEW_STATE', state: undefined });
   };
 
-  const startPlayerPreview = (stage: 'intro' | 'showRound' | 'showRedPlayer' | 'showBluePlayer' | 'showBothPlayers' | 'ready') => {
+  const startPlayerPreview = (stage: 'intro') => {
     if (!state.singlePlayerCall) dispatch({ type: 'START_PLAYER_CALL_SEQUENCE' });
     window.setTimeout(() => dispatch({ type: 'SET_PLAYER_CALL_PREVIEW_STATE', state: stage }), 60);
   };
-
-  const nextTeamStage = () => {
-    const stage = state.autoCallSequence?.stage;
-    if (stage === 'TEAM_CHUNG') return dispatch({ type: 'JUMP_TEAM_CALL_STAGE', stage: 'red' });
-    if (stage === 'TEAM_HONG') return dispatch({ type: 'JUMP_TEAM_CALL_STAGE', stage: 'waiting' });
-    if (stage === 'GREETING') {
-      const delay = Math.max(0.5, Number(state.config.teamCallReadyDelaySeconds ?? 3)) * 1000;
-      window.setTimeout(() => dispatch({ type: 'JUMP_TEAM_CALL_STAGE', stage: 'ready' }), delay);
-      return;
-    }
-    if (stage === 'DONE') return dispatch({ type: 'JUMP_TEAM_CALL_STAGE', stage: 'live' });
-    return dispatch({ type: 'JUMP_TEAM_CALL_STAGE', stage: 'blue' });
-  };
-
-  const playerStageButtons: Array<{
-    stage: 'intro' | 'showRound' | 'showRedPlayer' | 'showBluePlayer' | 'showBothPlayers' | 'ready';
-    label: string;
-    color: string;
-  }> = [
-    { stage: 'intro', label: 'INTRO', color: '#f2c14e' },
-    { stage: 'showRound', label: 'NEXT ROUND', color: '#f2c14e' },
-    { stage: 'showBluePlayer', label: 'BLUE PLAYER', color: '#33a2ff' },
-    { stage: 'showRedPlayer', label: 'RED PLAYER', color: '#ff2b39' },
-    { stage: 'showBothPlayers', label: 'BOTH PLAYERS / VS', color: '#f2c14e' },
-    { stage: 'ready', label: 'READY', color: '#39ff6a' },
-  ];
 
   return (
     <section dir="ltr" className={`${modal ? 'fixed inset-0 z-[260] m-0 min-h-screen w-full overflow-y-auto rounded-none p-3 md:p-5 lg:p-7' : fullScreen ? 'fixed inset-0 z-[480] m-0 min-h-screen w-full overflow-y-auto rounded-none p-4 md:p-6 lg:p-8' : 'mt-3 w-full rounded-2xl p-4'} relative overflow-hidden border-2 border-[hsl(var(--gold))]/30 bg-[radial-gradient(circle_at_10%_0%,rgba(242,193,78,.10),transparent_28%),radial-gradient(circle_at_92%_8%,rgba(51,162,255,.08),transparent_25%),linear-gradient(145deg,#090c12,#05070b)] shadow-[0_0_70px_rgba(242,193,78,.10)]`}>
@@ -282,15 +256,6 @@ export default function MainRefereeCallPanel({ state, dispatch, modal = false, o
                 <button type="button" onClick={() => dispatch({ type: 'STOP_BROADCAST_ANIMATION' })} disabled={!playerCall && !state.callAnimation} className="rounded-md border border-red-500/50 bg-red-500/10 px-2.5 py-1.5 text-[9px] font-black text-red-300 disabled:opacity-30"><X size={11} className="inline me-1"/>{T('STOP','إيقاف','ARRÊTER')}</button>
               </div>
 
-              <div className="mb-3 rounded-lg border border-white/10 bg-black/20 p-2">
-                <div className="mb-2 text-[9px] font-black tracking-[.18em] text-white/40">ANIMATION STAGES — EXACT PLAYER CALL</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {playerStageButtons.map((b) => (
-                    <button key={b.stage} type="button" onClick={() => startPlayerPreview(b.stage)} className="rounded-md border px-2.5 py-1.5 text-[8px] font-black uppercase" style={{ borderColor: `${b.color}66`, color: b.color, background: state.playerCallPreviewState === b.stage ? `${b.color}18` : 'transparent' }}>{b.label}</button>
-                  ))}
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {(['chung', 'hong'] as PlayerColor[]).map((side) => {
                   const blue = side === 'chung';
@@ -359,7 +324,6 @@ export default function MainRefereeCallPanel({ state, dispatch, modal = false, o
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border-2 border-[#f2c14e]/45 bg-[radial-gradient(circle_at_85%_0%,rgba(242,193,78,.09),transparent_30%),#06080c] p-4 md:p-6 shadow-[0_0_110px_rgba(242,193,78,.12)]" onMouseDown={(e) => e.stopPropagation()}>
             {(() => {
               const auto = state.config.teamCallAutoEnabled !== false;
-              const stage = state.autoCallSequence?.mode === 'teams' ? state.autoCallSequence.stage : undefined;
               const remaining = state.autoCallSequence?.stageEndsAt ? Math.max(0, (state.autoCallSequence.stageEndsAt - Date.now()) / 1000) : 0;
               const statusBlue = state.teamCallStatus?.chung || 'idle';
               const statusRed = state.teamCallStatus?.hong || 'idle';
@@ -376,7 +340,7 @@ export default function MainRefereeCallPanel({ state, dispatch, modal = false, o
                     <div className="mt-1 text-[10px] text-white/45">Dedicated Main Referee window · Team Call only · Public Display remains read-only.</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[9px] font-black text-white/55">STAGE: {stage || 'STANDBY'}</span>
+                    
                     <span className={`rounded-md border px-2 py-1 text-[9px] font-black ${auto ? 'border-[#39ff6a]/40 text-[#39ff6a]' : 'border-red-500/40 text-red-300'}`}>{auto ? 'AUTO ON' : 'AUTO OFF'}</span>
                     <button type="button" onClick={() => setTeamControlsOpen(false)} className="rounded-full border-2 border-white/15 px-3 py-1.5 text-[10px] font-black text-white/70 hover:border-white/30">CLOSE · إغلاق</button>
                   </div>
@@ -448,7 +412,6 @@ export default function MainRefereeCallPanel({ state, dispatch, modal = false, o
                         dispatch({type:'SET_CALL_SCREEN',active:false});
                       },3000);
                     }} className="rounded-full border-2 border-[#39ff6a]/60 px-3 py-2 text-[10px] font-black text-[#39ff6a]">READY</button>
-                    <button type="button" onClick={nextTeamStage} className="rounded-full border border-white/20 px-3 py-2 text-[10px] font-black text-white/75">NEXT STAGE</button>
                     <button type="button" onClick={()=>{const delay=Math.max(0.5,Number(state.config.teamCallGoLiveDelaySeconds??2))*1000; window.setTimeout(()=>dispatch({type:'GO_LIVE_BROADCAST'}),delay)}} className="rounded-full border-2 border-[#ffd866] bg-[#ffd866]/10 px-3 py-2 text-[10px] font-black text-[#ffd866]">{T('TV / GO LIVE','البث / مباشر','TV / DIRECT')}</button>
                     <button type="button" onClick={()=>{dispatch({type:'CANCEL_TEAM_CALL'});}} className="rounded-full border-2 border-red-500/70 bg-red-500/10 px-3 py-2 text-[10px] font-black text-red-300">CANCEL TEAM CALL</button>
                     <button type="button" onClick={()=>dispatch({type:'STOP_BROADCAST_ANIMATION'})} className="rounded-full border-2 border-red-500/60 bg-red-500/10 px-3 py-2 text-[10px] font-black text-red-300">{T('STOP','إيقاف','ARRÊTER')}</button>

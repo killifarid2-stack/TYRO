@@ -46,6 +46,8 @@ export default function ExactPlayerCallV515({ state }: { state: MatchState }) {
   const tournament = state.competitionName || 'WAB-TKD';
   const matchSeconds = Math.max(0, Number(state.timeRemaining ?? 120));
   const matchTime = `${Math.floor(matchSeconds / 60)}:${String(matchSeconds % 60).padStart(2, '0')}`;
+  const judgesConnected = Math.max(0, Number(state.connectedJudgeCount ?? 0));
+  const judgesAllowed = Math.max(1, Number(state.config?.judgeCount ?? 3));
 
   const flagStyle = (url?: string) => url
     ? `background-image:url(&quot;${esc(url)}&quot;);background-size:cover;background-position:center;background-repeat:no-repeat;`
@@ -83,6 +85,8 @@ export default function ExactPlayerCallV515({ state }: { state: MatchState }) {
       __BLUE_LOGO__: esc(blue.logo || ANIMATION_ASSETS.exactBlueClub),
       __BLUE_FLAG_STYLE__: flagStyle(blue.flag),
       __MATCH_TIME__: matchTime,
+      __JUDGES_PRESENT__: `${Math.min(judgesConnected, judgesAllowed)}/${judgesAllowed}`,
+      __JUDGES_CLASS__: judgesConnected > 0 ? 'judges good' : 'judges warn',
     };
     Object.entries(values).forEach(([key, value]) => { body = body.split(key).join(value); });
 
@@ -90,7 +94,7 @@ export default function ExactPlayerCallV515({ state }: { state: MatchState }) {
     // Its html/body/global CSS can therefore never leak into WAB-TKD's
     // Operator, Public Display, Team Call or scoreboard layout.
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${EXACT_PLAYER_CALL_CSS.replace('__LOCAL_FONT_FACES__', LOCAL_FONT_FACES)}</style></head><body>${body}</body></html>`;
-  }, [state, red.name, red.country, red.countryName, red.clubName, red.seed, red.number, red.photo, red.logo, red.flag, blue.name, blue.country, blue.countryName, blue.clubName, blue.seed, blue.number, blue.photo, blue.logo, blue.flag, tournament, nameFormat, matchTime]);
+  }, [state, red.name, red.country, red.countryName, red.clubName, red.seed, red.number, red.photo, red.logo, red.flag, blue.name, blue.country, blue.countryName, blue.clubName, blue.seed, blue.number, blue.photo, blue.logo, blue.flag, tournament, nameFormat, matchTime, judgesConnected, judgesAllowed]);
 
   const animationId = state.singlePlayerCall?.animationId || state.callAnimation?.ts || 'player-call';
 

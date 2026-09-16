@@ -310,7 +310,17 @@ export async function persistSavedMatch(state: MatchState): Promise<{ record: Sa
       try {
         const { data: t } = await supabase.from('tournaments').select('*').eq('id', record.tournament_id).single();
         if (t) await supabase.from('tournaments').update({ bracket_data: updateTournament(t).bracket_data }).eq('id', record.tournament_id);
-      } catch { /* local record remains the durable fallback */ }
+      } catch (err) {
+        // Local record remains the durable fallback, but this failure means
+        // the tournament's bracket_data (matchRecords/matchSummary/
+        // statistics) was NOT synced to Supabase — on a team tournament run
+        // across multiple mats/devices this is exactly what makes a match
+        // look "not saved" or "stuck" on another screen that reads from
+        // Supabase instead of this device's local copy. Surfaced to the
+        // console (F12) instead of swallowed silently, so it can be
+        // diagnosed instead of guessed at.
+        console.error('[WAB-TKD] persistSavedMatch: failed to sync tournament bracket_data to Supabase', { tournamentId: record.tournament_id, matchId: record.match_id, err });
+      }
       try {
         await supabase.from('matches').upsert({
           id: record.match_id,
@@ -355,7 +365,9 @@ export async function persistSavedMatch(state: MatchState): Promise<{ record: Sa
           team_roster: record.team_roster,
           mvp_reveal: record.mvp_reveal,
         } as any, { onConflict: 'id' });
-      } catch { /* local + tournament bracket_data remain durable */ }
+      } catch (err) {
+        console.error('[WAB-TKD] persistSavedMatch: failed to upsert into matches table', { tournamentId: record.tournament_id, matchId: record.match_id, err });
+      }
     }
   }
   logAudit('match_saved', `Match #${record.match_number} — ${record.competition_name}`);

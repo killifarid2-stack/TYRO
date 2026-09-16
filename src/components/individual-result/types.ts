@@ -49,5 +49,15 @@ export interface MatchData {
   refereeConfirmed?: boolean;
   goldenPointWin?: boolean;
   goldenRound?: number;
+  refereeVotes?: { left?: 'blue' | 'red'; center?: 'blue' | 'red'; right?: 'blue' | 'red' };
+  decisionType?: string;
+  aiRecommendation?: 'blue' | 'red' | 'unable';
+  aiConfidence?: number;
+  aiReason?: string;
   display?: { showFlag: boolean; showClub: boolean; showPhoto: boolean; showStage: boolean; showWeight: boolean };
+  competitionType?: string;
+  gender?: string;
+  ageGroup?: string;
+  weight?: string;
+  location?: string;
 }

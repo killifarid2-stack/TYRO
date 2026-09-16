@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, shell, dialog, session } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, shell, dialog, session, safeStorage } = require('electron');
 const { spawnSync } = require('child_process');
 const crypto = require('crypto');
 const path = require('path');
@@ -94,6 +94,13 @@ function writeConfig(cfg) {
 }
 
 let config = readConfig();
+if (!config.selectedDisplayFingerprint) config.selectedDisplayFingerprint = null;
+if (!['fit','fill','16:9'].includes(config.calibrationMode)) config.calibrationMode = '16:9';
+if (typeof config.showDisplayGuides !== 'boolean') config.showDisplayGuides = false;
+if (typeof config.showDisplayTest !== 'boolean') config.showDisplayTest = false;
+let publicDisplayConnection = 'DISCONNECTED';
+const publicDisplayHeartbeats = new Map();
+const PUBLIC_HEARTBEAT_TIMEOUT_MS = 4500;
 
 // ---------------------------------------------------------------------------
 // Window state
@@ -249,12 +256,18 @@ function attachLoadDiagnostics(win, label) {
 // Display helpers
 // ---------------------------------------------------------------------------
 function serializeDisplay(d, index) {
+  const label = String(d.label || '').trim();
+  const tvHint = /tv|television|smart.?tv|lg|samsung|sony|hisense|tcl|philips|panasonic|sharp|toshiba|haier|vizio/i.test(label);
   return {
     id: d.id,
-    label: `Display ${index + 1} (${d.size.width}x${d.size.height})`,
+    label: label || `Display ${index + 1} (${d.size.width}x${d.size.height})`,
     bounds: d.bounds,
+    workArea: d.workArea,
     size: d.size,
+    scaleFactor: d.scaleFactor,
+    rotation: d.rotation,
     isPrimary: d.id === screen.getPrimaryDisplay().id,
+    kind: d.id === screen.getPrimaryDisplay().id ? 'PC' : (tvHint ? 'TV' : 'External'),
   };
 }
 
@@ -278,18 +291,43 @@ function broadcastDisplaysChanged() {
   }
 }
 
+
+function getDisplayScale(target) {
+  const w=target?.bounds?.width||1920, h=target?.bounds?.height||1080;
+  const mode=config.calibrationMode||'16:9';
+  if(mode==='fill') return Math.max(w/1920,h/1080);
+  return Math.min(w/1920,h/1080);
+}
+
+// The Public Display is authored at 1920×1080. Electron zoom is used only as
+// one whole-page scale so legacy px/vw/vh animation layers share one coordinate
+// space; individual RED/MATCH/BLUE elements are never scaled independently.
+function getMasterCanvasZoom(target) {
+  const scale = getDisplayScale(target);
+  return Math.max(0.25, Math.min(4, scale));
+}
+
+function displayFingerprint(d) {
+  if (!d) return null;
+  return { label: String(d.label || '').trim(), width: d.size?.width || d.bounds?.width || 0, height: d.size?.height || d.bounds?.height || 0 };
+}
+function matchesSavedDisplay(d) {
+  const fp = config.selectedDisplayFingerprint;
+  if (!fp || !d) return false;
+  if (fp.label && d.label && fp.label === d.label) return true;
+  return Number(fp.width) === Number(d.size?.width) && Number(fp.height) === Number(d.size?.height);
+}
 function broadcastPublicStatus() {
-  const openDisplays = Array.from(publicWins.entries())
-    .filter(([, win]) => win && !win.isDestroyed())
-    .map(([id]) => id);
+  const openDisplays = Array.from(publicWins.entries()).filter(([, win]) => win && !win.isDestroyed()).map(([id]) => id);
   const status = {
     open: openDisplays.length > 0,
     displayId: publicWin && !publicWin.isDestroyed() ? publicWin.__displayId : (openDisplays[0] ?? null),
     openDisplays,
+    connection: publicDisplayConnection,
+    selectedDisplayId: config.selectedDisplayId ?? null,
+    selectedDisplayFingerprint: config.selectedDisplayFingerprint ?? null,
   };
-  if (operatorWin && !operatorWin.isDestroyed()) {
-    operatorWin.webContents.send('public-display:status-changed', status);
-  }
+  if (operatorWin && !operatorWin.isDestroyed()) operatorWin.webContents.send('public-display:status-changed', status);
 }
 
 // ---------------------------------------------------------------------------
@@ -300,9 +338,34 @@ function openPublicWindow(displayId) {
   if(!target&&config.selectedDisplayId!=null)target=findDisplayById(config.selectedDisplayId);
   if(!target)target=externals[0]||null; if(!target)return null;
   const existing=publicWins.get(target.id); if(existing&&!existing.isDestroyed()){existing.focus();return existing;}
-  config.selectedDisplayId=target.id; writeConfig(config);
+  config.selectedDisplayId=target.id;
+  config.selectedDisplayFingerprint=displayFingerprint(target);
+  writeConfig(config);
+  publicDisplayConnection='CONNECTING';
+  broadcastPublicStatus();
   const win=new BrowserWindow({x:target.bounds.x,y:target.bounds.y,width:target.bounds.width,height:target.bounds.height,icon:ICON,frame:false,show:false,autoHideMenuBar:true,backgroundColor:'#000000',webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true,preload:PRELOAD}});
-  win.__displayId=target.id; win.removeMenu?.(); win.once('ready-to-show',()=>{win.show();win.setFullScreen(true);});
+  win.__displayId=target.id; win.removeMenu?.();
+  win.webContents.once('did-finish-load',()=>{
+    // The renderer registers its match-state listener during mount. Sending
+    // the cached snapshot after did-finish-load closes the only real race in
+    // the dual-screen flow: opening the TV after the operator already has a
+    // live match in progress.
+    if(lastMatchState && !win.isDestroyed()) win.webContents.send('match-state-sync', lastMatchState);
+    if(lastBroadcastDesign && !win.isDestroyed()) win.webContents.send('broadcast-design-sync', lastBroadcastDesign);
+  });
+  win.once('ready-to-show',()=>{
+    win.show();
+    win.setFullScreen(true);
+    // Normalize the browser's CSS viewport to the 1920x1080 design space.
+    // Electron's zoom factor scales the entire rendered page uniformly, so
+    // vw/vh-based legacy animations and fixed-position layers cannot drift
+    // independently on 4K/HD/wireless displays.
+    const normalizedZoom = getMasterCanvasZoom(target);
+    win.webContents.setZoomFactor(normalizedZoom);
+    win.__wabZoomFactor = normalizedZoom;
+    publicDisplayConnection='CONNECTED';
+    broadcastPublicStatus();
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     try {
       const parsed = new URL(url);
@@ -330,7 +393,7 @@ function openPublicWindow(displayId) {
       win.webContents.toggleDevTools();
     }
   });
-  win.on('closed',()=>{publicWins.delete(target.id);if(publicWin===win)publicWin=null;broadcastPublicStatus();});
+  win.on('closed',()=>{publicDisplayHeartbeats.delete(win.webContents.id);publicWins.delete(target.id);if(publicWin===win)publicWin=null;if(publicWins.size===0 && publicDisplayConnection!=='DISCONNECTED') publicDisplayConnection='DISCONNECTED';broadcastPublicStatus();});
   publicWins.set(target.id,win); publicWin=win; broadcastPublicStatus(); return win;
 }
 function closePublicWindow(manual,displayId){
@@ -340,7 +403,7 @@ function closePublicWindow(manual,displayId){
 
 function movePublicWindowToDisplay(target) {
   if(!publicWin||publicWin.isDestroyed())return; const oldId=publicWin.__displayId;
-  publicWin.setFullScreen(false); publicWin.setBounds({x:target.bounds.x,y:target.bounds.y,width:target.bounds.width,height:target.bounds.height}); publicWin.setFullScreen(true); publicWin.__displayId=target.id; publicWins.delete(oldId); publicWins.set(target.id,publicWin);
+  publicWin.setFullScreen(false); publicWin.setBounds({x:target.bounds.x,y:target.bounds.y,width:target.bounds.width,height:target.bounds.height}); publicWin.setFullScreen(true); publicWin.__displayId=target.id; const z=getMasterCanvasZoom(target); publicWin.webContents.setZoomFactor(z); publicWin.__wabZoomFactor=z; publicWins.delete(oldId); publicWins.set(target.id,publicWin);
 }
 
 // ---------------------------------------------------------------------------
@@ -418,18 +481,48 @@ function createOperatorWindow() {
 // Display connect / disconnect handling
 // ---------------------------------------------------------------------------
 function handleDisplaysChanged() {
-  broadcastDisplaysChanged(); const externals=getExternalDisplays();
-  for(const [id,win] of Array.from(publicWins.entries())){if(win&&!win.isDestroyed()&&!findDisplayById(id)){win.close();publicWins.delete(id);}}
+  const current = screen.getAllDisplays();
+  broadcastDisplaysChanged();
+  const externals=getExternalDisplays();
+  const missing = [];
+  for(const [id,win] of Array.from(publicWins.entries())) {
+    if(win&&!win.isDestroyed()&&!findDisplayById(id)) { missing.push(id); win.close(); publicWins.delete(id); }
+  }
+  if (missing.length) { publicDisplayConnection='DISCONNECTED'; broadcastPublicStatus(); }
   const knownIds=new Set(handleDisplaysChanged._lastExternalIds||[]);
-  for(const d of externals){if(!knownIds.has(d.id)&&operatorWin&&!operatorWin.isDestroyed())operatorWin.webContents.send('displays:new-external',serializeDisplay(d,screen.getAllDisplays().indexOf(d)));}
-  handleDisplaysChanged._lastExternalIds=externals.map(d=>d.id); broadcastPublicStatus();
+  for(const d of externals){
+    if(!knownIds.has(d.id)&&operatorWin&&!operatorWin.isDestroyed()) {
+      operatorWin.webContents.send('displays:new-external',serializeDisplay(d,screen.getAllDisplays().indexOf(d)));
+    }
+  }
+  handleDisplaysChanged._lastExternalIds=externals.map(d=>d.id);
+  // A wireless/Miracast reconnect can receive a new Electron display id.
+  // Re-bind automatically using the saved monitor fingerprint.
+  if (publicWins.size===0 && config.selectedDisplayFingerprint && !manuallyClosed) {
+    const rebound=externals.find(matchesSavedDisplay);
+    if (rebound) {
+      config.selectedDisplayId=rebound.id;
+      config.selectedDisplayFingerprint=displayFingerprint(rebound);
+      writeConfig(config);
+      openPublicWindow(rebound.id);
+      return;
+    }
+  }
+  broadcastPublicStatus();
 }
 
 // ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
+// Keep the latest operator-owned snapshots in the Electron main process so
+// a display that connects after a state/design change starts from the same
+// production frame instead of the renderer's initial defaults.
+let lastMatchState = null;
+let lastBroadcastDesign = null;
+
 ipcMain.on('match-state-broadcast', (event, state) => {
   if (!isTrustedRenderer(event)) return;
+  lastMatchState = state || null;
   // Broadcast to EVERY open public display, not only the last window opened.
   // This keeps multi-screen/LED/OBS outputs identical when more than one
   // audience display is active.
@@ -442,7 +535,6 @@ ipcMain.on('match-state-broadcast', (event, state) => {
 // The designer and every audience display use the same design payload. The
 // main process keeps the last payload so a display opened after a design
 // change immediately receives the current version.
-let lastBroadcastDesign = null;
 ipcMain.on('broadcast-design-sync', (event, design) => {
   if (!isTrustedRenderer(event)) return;
   lastBroadcastDesign = design || null;
@@ -464,7 +556,27 @@ ipcMain.handle('public-display:open', (event, displayId) => {
 ipcMain.handle('public-display:close', (event, displayId) => {
   requireTrustedRenderer(event); closePublicWindow(true,displayId); return {open:publicWins.size>0,displayId:publicWin?.__displayId??null,openDisplays:Array.from(publicWins.keys())}; });
 
-ipcMain.handle('public-display:status', (event) => { requireTrustedRenderer(event); return {open:publicWins.size>0,displayId:publicWin?.__displayId??null,openDisplays:Array.from(publicWins.keys())}; });
+ipcMain.handle('public-display:status', (event) => { requireTrustedRenderer(event); return {open:publicWins.size>0,displayId:publicWin?.__displayId??null,openDisplays:Array.from(publicWins.keys()),connection:publicDisplayConnection,selectedDisplayId:config.selectedDisplayId??null,selectedDisplayFingerprint:config.selectedDisplayFingerprint??null}; });
+ipcMain.handle('public-display:prepare', (event, payload={}) => { requireTrustedRenderer(event, {allowPublic:true}); const target=publicWins.get(event.sender.id) || (publicWin&&!publicWin.isDestroyed()?publicWin:null); if(target){ target.__wabPrepared=Boolean(payload.ready); target.__wabAnimation=String(payload.animation||'PUBLIC_DISPLAY'); publicDisplayHeartbeats.set(target.webContents.id, Date.now()); publicDisplayConnection=payload.ready?'READY':'CONNECTING'; broadcastPublicStatus(); } return {ready:Boolean(target&&target.__wabPrepared),displayId:target?.__displayId??null}; });
+
+ipcMain.on('public-display:heartbeat', (event, payload={}) => {
+  if (!isTrustedRenderer(event, {allowPublic:true})) return;
+  const target = Array.from(publicWins.values()).find(w => w && !w.isDestroyed() && w.webContents.id === event.sender.id);
+  if (!target) return;
+  publicDisplayHeartbeats.set(event.sender.id, Date.now());
+  target.__wabPrepared = payload.ready !== false;
+  target.__wabAnimation = String(payload.animation || target.__wabAnimation || 'PUBLIC_DISPLAY');
+  if (publicDisplayConnection === 'DISCONNECTED' || publicDisplayConnection === 'RECONNECTING') { publicDisplayConnection = target.__wabPrepared ? 'READY' : 'CONNECTING'; broadcastPublicStatus(); }
+});
+
+ipcMain.handle('public-display:emergency', (event) => {
+  requireTrustedRenderer(event);
+  const ids=[];
+  for (const win of publicWins.values()) { if (win && !win.isDestroyed()) { ids.push(win.__displayId ?? null); win.__wabPrepared=false; win.webContents.send('public-display:emergency'); } }
+  publicDisplayConnection = ids.length ? 'READY' : 'DISCONNECTED';
+  broadcastPublicStatus();
+  return {ok:true, displays:ids.filter(v=>v!=null)};
+});
 
 ipcMain.handle('displays:get', (event) => { requireTrustedRenderer(event); return getAllDisplaysSerialized(); });
 
@@ -484,6 +596,25 @@ ipcMain.handle('displays:select', (event, displayId) => {
 });
 
 ipcMain.handle('displays:get-selected', (event) => { requireTrustedRenderer(event); return { selectedDisplayId: config.selectedDisplayId }; });
+
+ipcMain.handle('display:overlay:get', (event) => { requireTrustedRenderer(event, {allowPublic:true}); return { guides:Boolean(config.showDisplayGuides), test:Boolean(config.showDisplayTest) }; });
+ipcMain.handle('display:overlay:set', (event, value={}) => {
+  requireTrustedRenderer(event);
+  if (typeof value.guides === 'boolean') config.showDisplayGuides=value.guides;
+  if (typeof value.test === 'boolean') config.showDisplayTest=value.test;
+  writeConfig(config);
+  const payload={guides:Boolean(config.showDisplayGuides),test:Boolean(config.showDisplayTest)};
+  for (const win of publicWins.values()) if(win&&!win.isDestroyed()) win.webContents.send('display:overlay-changed',payload);
+  return payload;
+});
+ipcMain.handle('display:calibration:get', (event) => { requireTrustedRenderer(event); return { mode: config.calibrationMode || '16:9' }; });
+ipcMain.handle('display:calibration:set', (event, calibration) => {
+  requireTrustedRenderer(event);
+  const mode = ['fit','fill','16:9'].includes(calibration?.mode) ? calibration.mode : '16:9';
+  config.calibrationMode = mode; writeConfig(config);
+  if (publicWin && !publicWin.isDestroyed()) { const target=findDisplayById(publicWin.__displayId); if(target){ const z=getMasterCanvasZoom(target); publicWin.webContents.setZoomFactor(z); publicWin.__wabZoomFactor=z; } }
+  return { mode };
+});
 
 // Local Network (Wi-Fi) judge connections — offline, no internet needed.
 // This is the ONLY judge-connection transport in the app: a plain
@@ -917,6 +1048,20 @@ ipcMain.handle('secure-storage:delete', (event, key) => {
 // ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
+setInterval(() => {
+  const now = Date.now();
+  let stale = false;
+  for (const [id, win] of Array.from(publicWins.entries())) {
+    if (!win || win.isDestroyed()) { publicWins.delete(id); continue; }
+    const last = publicDisplayHeartbeats.get(win.webContents.id) || 0;
+    if (last && now - last > PUBLIC_HEARTBEAT_TIMEOUT_MS) { stale = true; win.__wabPrepared = false; }
+  }
+  if (publicWins.size === 0) publicDisplayConnection = 'DISCONNECTED';
+  else if (stale) publicDisplayConnection = 'DISCONNECTED';
+  else if (publicDisplayConnection === 'DISCONNECTED') publicDisplayConnection = 'RECONNECTING';
+  broadcastPublicStatus();
+}, 1500);
+
 app.whenReady().then(() => {
   if (app.isPackaged) installContentSecurityPolicy();
   if (!verifyBuildExists()) return;

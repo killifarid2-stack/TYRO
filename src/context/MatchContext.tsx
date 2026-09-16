@@ -32,7 +32,7 @@ type MatchAction =
   | { type: 'PAUSE' }
   | { type: 'RESUME' }
   | { type: 'TICK' }
-  | { type: 'ADD_SCORE'; player: PlayerColor; scoreType: ScoreType; addedBy?: ScoreEvent['addedBy']; judgeId?: string }
+  | { type: 'ADD_SCORE'; player: PlayerColor; scoreType: ScoreType; addedBy?: ScoreEvent['addedBy']; judgeId?: string; gamjeomPointsOverride?: number }
   | { type: 'REMOVE_SCORE'; player: PlayerColor }
   | { type: 'END_ROUND' }
   | { type: 'START_ROUND_CORRECTION'; targetRound: number }
@@ -555,7 +555,7 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
       return { ...state, timeRemaining: newTime };
     }
     case 'ADD_SCORE':
-      return addScore(state, action.player, action.scoreType, action.addedBy || 'operator', action.judgeId);
+      return addScore(state, action.player, action.scoreType, action.addedBy || 'operator', action.judgeId, action.gamjeomPointsOverride);
     case 'REMOVE_SCORE':
       return removeLastScore(state, action.player);
     case 'START_ROUND_CORRECTION': {
@@ -717,6 +717,11 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
     case 'CANCEL_ROUND_CORRECTION':
       return { ...state, roundCorrection: undefined, roundCorrectionReview: undefined };
     case 'END_ROUND':
+      // End Round is a live-fight boundary. A paused state is reserved for
+      // PTG, tie decisions, Kyeshi, etc.; those flows have their own
+      // explicit confirmation actions and must not accidentally end the same
+      // round twice.
+      if (state.status !== 'fighting') return state;
       return endRound(state);
     case 'PREPARE_NEXT_ROUND_CALL': {
       // Par Équipe inter-round cinematic: do NOT advance the clock yet.

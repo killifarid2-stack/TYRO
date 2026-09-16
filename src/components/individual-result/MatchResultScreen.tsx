@@ -1,167 +1,236 @@
-import { ChampionshipMedal } from "./ChampionshipMedal";
-import { ArenaBackground } from "./ArenaBackground";
-import { MatchHeader } from "./MatchHeader";
-import { WinnerBanner } from "./WinnerBanner";
-import { CompetitorCard } from "./CompetitorCard";
-import { RoundResultCard } from "./RoundResultCard";
-import { MatchInfo } from "./MatchInfo";
-import { MatchStatistics } from "./MatchStatistics";
-import { TournamentBranding } from "./TournamentBranding";
-import type { MatchData } from "./types";
+import * as React from "react";
 import { useI18n } from "@/lib/i18n";
-import koBlue from "@/assets/ko/ko-blue.png";
-import koRed from "@/assets/ko/ko-red.png";
+import FlagImage from "@/components/FlagImage";
+import type { MatchData, RoundResult } from "./types";
+import medalUrl from "@/assets/medal-transparent.png";
+import splashBannerUrl from "@/assets/splash-banner.png";
 
-function InfoTile({ label, value }: { label: string; value: string | number }) {
+const DESIGN_W = 1920;
+const DESIGN_H = 1080;
+
+function methodLabel(code: string, goldenPoint?: boolean) {
+  if (goldenPoint) return "GOLDEN POINT";
+  const labels: Record<string, string> = {
+    KO: "KNOCKOUT",
+    WDR: "WALKOVER / WITHDRAWAL",
+    PTF: "POINTS / DECISION",
+    PTG: "POINT GAP",
+    RSC: "REFEREE STOP CONTEST",
+    DSQ: "DISQUALIFICATION",
+    SUP: "SUPERIORITY",
+    PUN: "PUNITIVE DECLARATION",
+    DQB: "DISQUALIFICATION — UNSPORTSMANLIKE BEHAVIOR",
+    GDP: "GOLDEN POINT",
+    KYESHI: "KYESHI",
+  };
+  return labels[code] || code || "DECISION";
+}
+
+function decisionText(match: MatchData) {
+  if (match.decisionType === "WOOSE_GIROK") return "WOO-SE-GIROK · REFEREE / JUDGES DECISION";
+  if (match.decisionType === "AI_RECOMMENDATION") return "AI TIE ANALYSIS · DECISION SUPPORT";
+  if (match.aiRecommendation && match.aiRecommendation !== "unable") return `AI RECOMMENDATION · ${match.aiRecommendation.toUpperCase()}`;
+  return "";
+}
+
+function roundWinner(round: RoundResult) {
+  if (round.winner === "blue") return "BLUE";
+  if (round.winner === "red") return "RED";
+  if (round.winner === "draw") return "DRAW";
+  if (round.blue > round.red) return "BLUE";
+  if (round.red > round.blue) return "RED";
+  return "DRAW";
+}
+
+function MetaItem({ label, value }: { label: string; value?: string | number }) {
   return (
-    <div className="clip-angled panel-glass px-3 py-2 text-center">
-      <div className="font-display text-[0.58rem] font-bold uppercase tracking-[0.22em] text-gold xl:text-[0.7rem]">{label}</div>
-      <div className="mt-0.5 font-display text-sm font-black uppercase tracking-wide text-foreground xl:text-xl">{value}</div>
+    <div className="min-w-0 px-3 py-2 text-center">
+      <div className="font-display text-[9px] font-black uppercase tracking-[.18em] text-[#ffd866]/65">{label}</div>
+      <div className="mt-1 truncate font-display text-[13px] font-black uppercase tracking-[.05em] text-white/90">{value || "—"}</div>
     </div>
   );
 }
 
-/**
- * Full-bleed public result composition.
- * The 16:9 design is scaled to the actual public window; 1280x720 is therefore
- * a true edge-to-edge broadcast frame with no letterbox gaps.
- */
-const DESIGN_W = 1920;
-const DESIGN_H = 1080;
+function PlayerVisual({ photo, flag, name, accent, side }: { photo?: string; flag?: string; name: string; accent: string; side: "blue" | "red" }) {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [photo]);
+  const usePhoto = Boolean(photo && !failed);
+  return (
+    <div className="relative flex h-[150px] w-[150px] shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-black/55"
+      style={{ border: `2px solid ${accent}99`, boxShadow: `0 0 28px ${accent}35, inset 0 0 22px rgba(0,0,0,.8)` }}>
+      {usePhoto ? (
+        <img src={photo} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : flag ? (
+        <FlagImage code={flag} size={220} className="h-[94px] w-[138px] rounded-lg object-cover" />
+      ) : (
+        <span className="font-display text-4xl font-black text-white/75">{name.slice(0, 2).toUpperCase()}</span>
+      )}
+      {usePhoto && flag && (
+        <div className={`absolute bottom-2 ${side === "blue" ? "right-2" : "left-2"} overflow-hidden rounded border-2 border-white/80 bg-black/70 shadow-[0_0_14px_rgba(0,0,0,.7)]">
+          <FlagImage code={flag} size={54} className="h-6 w-9 object-cover" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export function MatchResultScreen({ match, playerPhoto }: { match: MatchData; playerPhoto?: string }) {
-  const { t, lang } = useI18n();
-  const corner = match.winner.corner;
-  const tournament = match.tournament || "WAB-TKD CHAMPIONSHIP";
-  const category = match.category || "—";
-  const method = (match.resultMethod || "PTF").toUpperCase();
-  const resultRound = match.resultRound || match.decisiveRound || match.rounds.length || 1;
-  const isKo = method === 'KO';
-  const isGoldenPoint = !!match.goldenPointWin;
-  // Strict asset rule: only the real player asset passed by MatchState is used.
-  // Never substitute a placeholder, generated image, or generic player artwork.
-  const winnerPhoto = match.display?.showPhoto === false ? undefined : playerPhoto;
+  const { lang } = useI18n();
+  const [revealPhase, setRevealPhase] = React.useState(0);
+  React.useEffect(() => {
+    setRevealPhase(0);
+    const timers = [
+      window.setTimeout(() => setRevealPhase(1), 140),
+      window.setTimeout(() => setRevealPhase(2), 650),
+      window.setTimeout(() => setRevealPhase(3), 1150),
+      window.setTimeout(() => setRevealPhase(4), 1750),
+    ];
+    return () => timers.forEach(window.clearTimeout);
+  }, [match.matchId, match.winner.name]);
+  const blueWon = match.winner.corner === "blue";
+  const accent = blueWon ? "#3ea5ff" : "#ff4555";
+  const tournament = match.tournament || "WAB TAEKWONDO CHAMPIONSHIP";
+  const winnerName = match.winner.name || (blueWon ? "CHUNG" : "HONG");
+  const country = match.winner.country || "—";
+  const club = match.winner.club || "—";
   const showFlag = match.display?.showFlag !== false;
   const showClub = match.display?.showClub !== false;
-  const showStage = match.display?.showStage !== false;
-  const showWeight = match.display?.showWeight !== false;
-  const roundWins = match.rounds.reduce((acc, r) => {
-    if (r.winner === 'blue' || (!r.winner && r.blue > r.red)) acc.blue += 1;
-    else if (r.winner === 'red' || (!r.winner && r.red > r.blue)) acc.red += 1;
+  const winnerPhoto = match.display?.showPhoto === false ? undefined : playerPhoto;
+  const rounds = match.rounds.slice().sort((a, b) => a.round - b.round);
+  const roundWins = rounds.reduce((acc, round) => {
+    const winner = roundWinner(round);
+    if (winner === "BLUE") acc.blue += 1;
+    if (winner === "RED") acc.red += 1;
     return acc;
   }, { blue: 0, red: 0 });
-  const hasWooDecision = match.rounds.some((r:any) => String(r.decisionType || '').toUpperCase() === 'WOOSE_GIROK' || String(r.decisionLabel || '').toUpperCase().includes('WOO-SE-GIROK'));
-  const hasAiDecision = match.rounds.some((r:any) => String(r.decisionType || '').toUpperCase().includes('AI'));
-  const finalDecisionLabel = method === 'PTG' ? 'ENDED BY POINT GAP' : hasWooDecision ? 'ENDED BY WOO-SE-GIROK DECISION' : hasAiDecision ? 'ENDED BY AI-ASSISTED DECISION' : (method === 'SUP' || method === 'PTF') ? 'ENDED BY DECISION' : method;
+  const code = String(match.resultMethod || "DECISION").toUpperCase();
+  const resultLabel = methodLabel(code, match.goldenPointWin);
+  const decision = decisionText(match);
+  const winnerRound = match.resultRound || match.decisiveRound;
 
   return (
-    <main data-wab-layer-root="match-result" className="relative h-screen w-screen overflow-hidden bg-black" dir={lang === "ar" ? "rtl" : "ltr"}>
-      <ArenaBackground />
+    <main
+      data-wab-layer-root="match-result"
+      data-winner-reveal-phase={revealPhase}
+      className="relative h-screen w-screen overflow-hidden bg-[#020306] text-white"
+      dir={lang === "ar" ? "rtl" : "ltr"}
+      style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+    >
+      <style>{`
+        @keyframes winnerPageIn { from { opacity:0; transform:translateY(18px) scale(.985) } to { opacity:1; transform:translateY(0) scale(1) } }
+        @keyframes winnerTitleIn { from { opacity:0; letter-spacing:.42em; transform:scale(.94) } to { opacity:1; letter-spacing:.14em; transform:scale(1) } }
+        @keyframes winnerFlash { 0% { opacity:0; transform:scale(.55) } 18% { opacity:.95 } 100% { opacity:0; transform:scale(1.7) } }
+        @keyframes winnerShock { 0% { transform:scale(.72); opacity:0 } 55% { transform:scale(1.08); opacity:1 } 100% { transform:scale(1); opacity:1 } }
+        @keyframes medalEnter { 0% { opacity:0; transform:scale(.38) rotate(-16deg) translateY(35px) } 55% { opacity:1; transform:scale(1.14) rotate(4deg) translateY(-4px) } 78% { transform:scale(.96) rotate(-1deg) } 100% { opacity:1; transform:scale(1) rotate(0) translateY(0) } }
+        @keyframes medalFloat { 0%,100% { transform:translateY(0) rotate(-1deg) } 50% { transform:translateY(-8px) rotate(1deg) } }
+        @keyframes goldSweep { from { transform:translateX(-110%) } to { transform:translateX(110%) } }
+        @keyframes energyLine { 0% { transform:scaleX(0); opacity:0 } 35% { opacity:1 } 100% { transform:scaleX(1); opacity:0 } }
+        @keyframes winnerPulse { 0%,100% { box-shadow:0 0 30px var(--winner-glow), inset 0 0 35px rgba(255,255,255,.02) } 50% { box-shadow:0 0 75px var(--winner-glow), inset 0 0 55px rgba(255,216,102,.07) } }
+        @media (prefers-reduced-motion: reduce) { * { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+      `}</style>
 
-      <div
-        className="absolute left-1/2 top-1/2 origin-center"
-        style={{
-          width: DESIGN_W,
-          height: DESIGN_H,
-          transform: "translate(-50%, -50%) scale(var(--wab-broadcast-fit-scale, 1))",
-          background: "radial-gradient(circle at 50% 38%, oklch(0.17 0.035 265 / .52), transparent 58%), oklch(0.055 0.018 265)",
-        }}
-      >
-        <div className="flex h-full w-full flex-col gap-4 px-7 py-5">
-          {/* Tournament is deliberately above category and match title. */}
-          <MatchHeader tournament={tournament} category={category} stage={match.stage} matchId={match.matchId} showStage={showStage} showWeight={showWeight} />
+      <div className="absolute inset-0" style={{ width: DESIGN_W, height: DESIGN_H, left: "50%", top: "50%", transform: "translate(-50%,-50%) scale(var(--wab-broadcast-fit-scale,1))" }}>
+        <div className="absolute inset-0 overflow-hidden bg-[#020306]" data-reveal-phase={revealPhase}>
+          {/* Winner cinematic energy layer: presentation only; it never changes match state. */}
+          <div className="pointer-events-none absolute inset-0 z-[1]" aria-hidden="true">
+            <div className="absolute left-1/2 top-[47%] h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#ffd866]/10 blur-[70px]" style={{ opacity: revealPhase >= 2 ? 1 : 0, transition: 'opacity .5s ease' }} />
+            <div className="absolute left-[4%] right-[4%] top-[49%] h-px bg-gradient-to-r from-transparent via-[#ffd866] to-transparent" style={{ animation: revealPhase >= 2 ? 'energyLine 1.2s ease-out both' : 'none' }} />
+            <div className="absolute left-1/2 top-[45%] h-[430px] w-[430px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#ffd866]/20" style={{ animation: revealPhase >= 2 ? 'winnerShock 1s ease-out both' : 'none' }} />
+            <div className="absolute left-1/2 top-[45%] h-[650px] w-[650px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#ffd866]/10" style={{ animation: revealPhase >= 2 ? 'winnerShock 1.3s ease-out .12s both' : 'none' }} />
+            <div className="absolute inset-0 bg-[#ffd866]/20" style={{ animation: revealPhase === 2 ? 'winnerFlash .75s ease-out both' : 'none' }} />
+          </div>
+          <img src={splashBannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-[.09]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_22%,rgba(255,216,102,.13),transparent_35%),radial-gradient(circle_at_18%_50%,rgba(255,60,75,.09),transparent_28%),radial-gradient(circle_at_82%_50%,rgba(62,165,255,.09),transparent_28%),linear-gradient(180deg,rgba(1,3,7,.74),#020306_78%)]" />
+          <div className="absolute inset-x-0 top-0 h-[5px] bg-gradient-to-r from-transparent via-[#ffd866] to-transparent shadow-[0_0_25px_rgba(255,216,102,.8)]" />
 
-          <div className="grid min-h-0 flex-1 grid-cols-[500px_minmax(0,1fr)_300px] gap-5">
-            {/* Champion portrait + medal lane. The medal is visually above the round cards, never over them. */}
-            <section className="relative min-h-0 overflow-visible">
-              <div className="relative h-full overflow-visible">
-                <div className="clip-angled panel-glass absolute inset-0 overflow-hidden" style={{ boxShadow: "inset 0 0 0 2px color-mix(in oklab,var(--gold) 78%,transparent), inset 0 0 70px color-mix(in oklab,var(--teamblue-bright) 25%,transparent), 0 0 45px color-mix(in oklab,var(--gold) 20%,transparent)" }}>
-                  {winnerPhoto ? (
-                    <img src={winnerPhoto} alt={match.winner.name} className="absolute inset-0 h-full w-full object-cover object-top" />
-                  ) : (
-                    <div className="absolute inset-0 bg-black/20" aria-label="Winner photo asset unavailable" />
-                  )}
-                  <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_40%,oklch(.04_.02_265/.18)_58%,oklch(.04_.02_265/.98)_100%)]" />
-                  <div className="absolute inset-x-0 bottom-0 px-5 pb-5 pt-20 text-center">
-                    <div className="font-display text-sm font-black uppercase tracking-[.42em] text-gold">{t("championLabel")}</div>
-                    <div className="text-metal mt-1 font-display text-5xl font-black italic uppercase leading-none">{match.winner.name}</div>
-                    <div className="mt-2 font-display text-sm uppercase tracking-[.25em] text-white/75">{match.winner.country}{showClub ? ` · ${match.winner.club}` : ""}</div>
-                  </div>
-                  <div className="pointer-events-none absolute inset-0 clip-angled" style={{ boxShadow: "inset 0 0 0 3px color-mix(in oklab,var(--gold) 75%,transparent), inset 0 0 30px color-mix(in oklab,var(--gold-bright) 18%,transparent)" }} />
-                </div>
+          {/* One tournament-information strip only. No duplicate metadata block. */}
+          <header className="absolute left-[70px] right-[70px] top-[34px]" style={{ animation: "winnerPageIn .55s ease-out both", opacity: revealPhase >= 1 ? undefined : 0 }}>
+            <div className="text-center font-display text-[38px] font-black uppercase tracking-[.14em] text-[#fff1bd]" style={{ textShadow: "0 0 28px rgba(255,216,102,.34)" }}>{tournament}</div>
+            <div className="mt-5 grid grid-cols-8 overflow-hidden rounded-[14px] border border-[#ffd866]/30 bg-black/55 shadow-[0_0_32px_rgba(255,216,102,.08),inset_0_0_20px_rgba(255,216,102,.03)]">
+              <MetaItem label="TYPE" value={match.competitionType || "TOURNAMENT"} />
+              <MetaItem label="GENDER" value={match.gender} />
+              <MetaItem label="AGE GROUP" value={match.ageGroup} />
+              <MetaItem label="DIVISION" value={match.stage} />
+              <MetaItem label="WEIGHT" value={match.weight || match.category} />
+              <MetaItem label="MATCH" value={match.matchId != null ? `#${match.matchId}` : "—"} />
+              <MetaItem label="DATE" value={match.date} />
+              <MetaItem label="LOCATION" value={match.location || "WORLD ARENA"} />
+            </div>
+          </header>
 
-                <div className="pointer-events-none absolute -right-20 -top-16 z-30 h-[330px] w-[250px] overflow-visible">
-                  <ChampionshipMedal width={250} className="animate-medal-hang" />
-                </div>
-              </div>
-            </section>
-
-            {/* Main winner area */}
-            <section className="flex min-h-0 flex-col gap-3">
-              <div className="clip-angled panel-glass shrink-0 px-5 py-4" style={{ boxShadow: "inset 0 0 0 2px color-mix(in oklab,var(--gold) 72%,transparent), 0 0 45px color-mix(in oklab,var(--gold) 18%,transparent)" }}>
-                <div className="text-center font-display text-sm font-black uppercase tracking-[.38em] text-gold">{t("match")} {match.matchId} · {t("finalResultLabel")}</div>
-                <div className="mt-3"><WinnerBanner score={match.score} winnerCorner={corner} /></div>
-                <div className="mt-3 grid grid-cols-2 items-stretch gap-3 rounded-xl border-2 border-[hsl(var(--gold))]/40 bg-black/30 px-4 py-3">
-                  <div className="text-center rounded-lg border border-teamblue-bright/30 bg-teamblue-bright/[.06] py-2">
-                    <div className="text-[9px] font-black tracking-[.2em] text-teamblue-bright">BLUE ROUNDS WON</div>
-                    <div className="font-display text-4xl font-black text-teamblue-bright">{roundWins.blue}</div>
-                  </div>
-                  <div className="text-center rounded-lg border border-teamred-bright/30 bg-teamred-bright/[.06] py-2">
-                    <div className="text-[9px] font-black tracking-[.2em] text-teamred-bright">RED ROUNDS WON</div>
-                    <div className="font-display text-4xl font-black text-teamred-bright">{roundWins.red}</div>
-                  </div>
-                </div>
-                <div className={`mt-2 rounded-xl border-2 px-4 py-2.5 text-center ${method === 'PTG' ? 'border-yellow-300/65 bg-yellow-400/10 shadow-[0_0_28px_rgba(250,204,21,.16)]' : method === 'SUP' || method === 'PTF' ? 'border-cyan-300/45 bg-cyan-400/10' : 'border-white/15 bg-black/20'}`}>
-                  <div className="font-display text-[9px] font-black tracking-[.28em] text-white/45">MATCH END REASON</div>
-                  <div className="mt-1 font-display text-lg font-black tracking-[.12em] text-white">{finalDecisionLabel}</div>
-                </div>
-              </div>
-
-              <CompetitorCard competitor={match.winner} showFlag={showFlag} showClub={showClub} />
-
-              <div className={`clip-angled shrink-0 px-4 py-2 text-center border ${isGoldenPoint ? 'border-yellow-300/80 bg-yellow-400/10 shadow-[0_0_42px_rgba(250,204,21,.30)]' : isKo ? 'border-red-400/60 bg-red-500/10 shadow-[0_0_32px_rgba(248,113,113,.22)]' : 'border-[hsl(var(--gold))]/30 bg-black/20'}`} data-result-method={method} data-golden-point={isGoldenPoint ? 'true' : 'false'}>
-                <div className="text-[9px] font-black uppercase tracking-[.24em] text-white/45">{t("matchEndResultConfirmed")}</div>
-                <div className="mt-1 flex items-center justify-center gap-3">
-                  {isKo && <img src={match.winner.corner === 'blue' ? koBlue : koRed} alt="KO" className="h-14 w-28 object-contain" />}
-                  <span className={`font-display text-2xl font-black uppercase tracking-[.18em] ${isGoldenPoint ? 'text-yellow-200' : isKo ? 'text-red-300' : 'text-[hsl(var(--gold))]'}`}>{isGoldenPoint ? t('goldenPointLabel') : method}</span>
-                  <span className="text-sm font-black text-white/75">{t("round")} {resultRound}</span>
-                </div>
-                {isGoldenPoint && (
-                  <div className="mt-1 font-display text-[11px] font-black uppercase tracking-[.34em] text-yellow-100/90">{t("goldenRoundSuddenDeath")}</div>
-                )}
-              </div>
-
-              <div className="clip-angled panel-glass shrink-0 grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2" data-result-method={method}>
-                <div className="font-display text-xs font-black uppercase tracking-[.2em] text-gold">{t("resultMethodLabel")}</div>
-                {isKo ? <img src={match.winner.corner === 'blue' ? koBlue : koRed} alt="KO" className="h-12 w-24 object-contain" /> : <div className={`text-center font-display text-sm font-black uppercase ${isGoldenPoint ? 'text-yellow-200' : 'text-gold'}`}>{isGoldenPoint ? t('goldenPointLabel') : method}</div>}
-                <div className="text-right font-display text-xs font-black uppercase tracking-[.16em] text-foreground/80">{isGoldenPoint ? `${t("goldenRoundLabel")} ${resultRound}` : `${t("round")} ${resultRound}`}</div>
-              </div>
-
-              {/* Round frames: larger, true rectangular cards with a visible breathing gap.
-                  Fixed height prevents flex stretching while giving each round its full visual weight. */}
-              <div className="grid shrink-0 grid-cols-3 gap-8 min-h-[340px] h-[340px]">
-                {match.rounds.slice(0, 3).map((r, i) => (
-                  <RoundResultCard key={r.round} result={r} perspective={corner} index={i} decisive={i === Math.min(match.rounds.length - 1, 2)} />
-                ))}
-              </div>
-
-              <div className="grid grid-cols-5 gap-3">
-                {showWeight && <InfoTile label={t("categoryLabel")} value={category} />}
-                {showStage && <InfoTile label={t("stageLabel")} value={match.stage} />}
-                <InfoTile label={t("dateLabel")} value={match.date} />
-                <InfoTile label={t("matLabel")} value={match.ring} />
-                <InfoTile label={t("methodLabel")} value={match.resultMethod || "PTF"} />
-              </div>
-            </section>
-
-            {/* Match information stays isolated in its own frame. */}
-            <section className="min-h-0">
-              <MatchInfo matchId={match.matchId} date={match.date} time={match.time} ring={match.ring} rounds={match.rounds} totalWarnings={match.stats.warnings} warningLimitPerRound={match.stats.warningLimitPerRound ?? 5} />
-            </section>
+          <div className="absolute left-[70px] right-[70px] top-[205px] text-center" style={{ animation: revealPhase >= 2 ? "winnerTitleIn .7s cubic-bezier(.16,1,.3,1) both" : "none", opacity: revealPhase >= 2 ? 1 : 0 }}>
+            <div className="font-display text-[18px] font-black tracking-[.35em] text-white/40">OFFICIAL MATCH RESULT</div>
+            <div className="mt-2 font-display text-[46px] font-black tracking-[.14em] text-white">MATCH <span className="text-[#ffd866]">{match.matchId || "—"}</span> <span className="text-white/25">—</span> RESULT</div>
           </div>
 
-          <MatchStatistics stats={match.stats} corner={corner} rounds={match.rounds} />
-          <TournamentBranding />
+          {/* Large medal: award object only, no trophy and no nested frame. */}
+          <div className="absolute right-[165px] top-[270px] z-10 flex h-[260px] w-[260px] items-center justify-center" style={{ animation: revealPhase >= 2 ? "medalEnter .9s cubic-bezier(.16,1,.3,1) both" : "none", opacity: revealPhase >= 2 ? 1 : 0 }}>
+            <div className="absolute inset-[15%] rounded-full bg-[#ffd866]/10 blur-3xl" />
+            <img src={medalUrl} alt="WAB-TKD medal" className="relative h-[245px] w-[245px] object-contain" style={{ filter: "drop-shadow(0 0 20px rgba(255,230,130,.95)) drop-shadow(0 0 65px rgba(255,174,0,.48))", animation: revealPhase >= 3 ? "medalFloat 3.2s ease-in-out 0s infinite" : "none" }} />
+          </div>
+
+          {/* Round wins are deliberately the visual priority; per-round points are compact. */}
+          <section className="absolute left-[90px] right-[430px] top-[292px]" style={{ animation: revealPhase >= 3 ? "winnerPageIn .65s ease-out both" : "none", opacity: revealPhase >= 3 ? 1 : 0 }}>
+            <div className="font-display text-[13px] font-black tracking-[.30em] text-[#ffd866]">ROUNDS WON</div>
+            <div className="mt-3 flex items-end gap-7">
+              <div className="flex items-end gap-3">
+                <span className="font-display text-[104px] font-black leading-none text-[#ff4555]" style={{ textShadow: "0 0 30px rgba(255,69,85,.45)" }}>{roundWins.red}</span>
+                <span className="pb-3 font-display text-[15px] font-black tracking-[.20em] text-red-200/70">RED</span>
+              </div>
+              <div className="pb-3 font-display text-[22px] font-black text-white/20">:</div>
+              <div className="flex items-end gap-3">
+                <span className="font-display text-[104px] font-black leading-none text-[#3ea5ff]" style={{ textShadow: "0 0 30px rgba(62,165,255,.45)" }}>{roundWins.blue}</span>
+                <span className="pb-3 font-display text-[15px] font-black tracking-[.20em] text-blue-200/70">BLUE</span>
+              </div>
+            </div>
+            <div className="mt-4 h-[2px] bg-gradient-to-r from-[#ff4555] via-[#ffd866] to-[#3ea5ff] opacity-60" />
+            <div className="mt-3 flex max-w-[980px] items-center gap-3">
+              {rounds.length ? rounds.slice(0, 5).map((round) => {
+                const rw = roundWinner(round);
+                const color = rw === "RED" ? "#ff4555" : rw === "BLUE" ? "#3ea5ff" : "#ffd866";
+                return (
+                  <div key={round.round} className="flex min-w-[132px] flex-1 items-center justify-between border-b border-white/10 px-1 pb-2">
+                    <span className="font-display text-[11px] font-black tracking-[.15em] text-white/35">R{round.round}</span>
+                    <span className="font-display text-[18px] font-black tabular-nums"><span className="text-[#3ea5ff]">{round.blue}</span><span className="mx-2 text-white/20">—</span><span className="text-[#ff4555]">{round.red}</span></span>
+                    <span className="font-display text-[9px] font-black tracking-[.08em]" style={{ color }}>{rw}</span>
+                  </div>
+                );
+              }) : <div className="text-sm font-bold text-white/30">R1 — R2 — R3</div>}
+            </div>
+            <div className="mt-5 flex items-center gap-7 font-display text-[12px] font-black uppercase tracking-[.16em] text-white/45">
+              <span>TOTAL <b className="text-white/85">{match.score.blue} — {match.score.red}</b></span>
+              <span>{resultLabel}</span>
+              {winnerRound ? <span>DECISIVE R{winnerRound}</span> : null}
+              {match.goldenPointWin ? <span className="text-[#ffd866]">GOLDEN POINT</span> : null}
+            </div>
+            {decision && <div className="mt-3 font-display text-[10px] font-black tracking-[.16em] text-[#ffd866]/75">{decision}</div>}
+          </section>
+
+          {/* Single bottom player frame. All winner identity information lives here. */}
+          <section className="absolute bottom-[58px] left-[70px] right-[70px] h-[245px] overflow-hidden rounded-[22px] border-2 bg-black/65"
+            style={{ borderColor: `${accent}aa`, boxShadow: `0 0 55px ${accent}20, inset 0 0 45px ${accent}0d`, animation: revealPhase >= 4 ? "winnerPageIn .7s ease-out both" : "none", opacity: revealPhase >= 4 ? 1 : 0 }}>
+            <div className="absolute inset-y-0 left-0 w-[8px]" style={{ background: accent, boxShadow: `0 0 28px ${accent}` }} />
+            <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${accent}16, rgba(0,0,0,.72) 38%, rgba(255,216,102,.06))` }} />
+            <div className="relative flex h-full items-center gap-6 px-8">
+              <PlayerVisual photo={winnerPhoto} flag={showFlag ? match.winner.flag || country : undefined} name={winnerName} accent={accent} side={blueWon ? "blue" : "red"} />
+              <div className="min-w-0 flex-1">
+                <div className="font-display text-[13px] font-black tracking-[.28em]" style={{ color: accent }}>WINNER · {blueWon ? "BLUE" : "RED"}</div>
+                <div className="mt-2 truncate font-display text-[58px] font-black uppercase leading-none tracking-[.02em] text-white" style={{ textShadow: `0 0 24px ${accent}28` }}>{winnerName}</div>
+                <div className="mt-4 flex items-center gap-5 font-display text-[15px] font-black uppercase tracking-[.12em] text-white/55">
+                  {showClub && club !== "—" && <span>{club}</span>}
+                  {country !== "—" && <span>{country}</span>}
+                  {match.winner.number && <span>#{match.winner.number}</span>}
+                </div>
+              </div>
+              <div className="w-[330px] shrink-0 text-right">
+                <div className="font-display text-[11px] font-black tracking-[.22em] text-[#ffd866]">CHAMPIONSHIP RESULT</div>
+                <div className="mt-3 font-display text-[34px] font-black text-white">{resultLabel}</div>
+                <div className="mt-2 font-display text-[12px] font-bold tracking-[.16em] text-white/45">{match.category || "—"}{match.ring ? ` · MAT ${match.ring}` : ""}</div>
+              </div>
+            </div>
+            <div className="absolute inset-y-0 left-0 w-[28%] bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ animation: "goldSweep 4s ease-in-out 1.5s infinite" }} />
+          </section>
         </div>
       </div>
     </main>

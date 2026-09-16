@@ -67,3 +67,13 @@ Reverse Screen أو تلقائيًا؟) أو تسجيل شاشة قصير.
 ### بگين آخرين مذكورين في نص سابق (round advancement / تسجيل البطولات)
 لم يصلاني وصف كافٍ لهما بعد — نفس الأمر، بحاجة لخطوات دقيقة لإعادة إنتاج
 المشكلة قبل أي محاولة إصلاح حتى لا نخاطر بكسر V35.
+
+
+## Follow-up 2026-09-16 — remaining visual/rules hardening
+
+- Par Équipe winner presentation now uses the real championship medal asset instead of any cup/trophy artwork; medal entrance/float/glow matches the Individual Winner visual language.
+- Removed the unused trophy-burst implementation from the Public Scoreboard so the old trophy cannot reappear through a legacy winner animation path.
+- REST player photo/flag placement now follows the outer-side convention: RED flag left, BLUE flag right.
+- Fixed the REST player metadata alignment class so BLUE right-alignment is actually applied instead of being rendered as a literal template string.
+- Individual Winner player flag now follows the same outer-side rule: RED left, BLUE right; when a photo is missing the large flag fallback remains.
+- Added a regression test proving LAST 10s ×2 is one Gam-jeom event worth exactly +2 to the opponent, and that the tenth penalty slot loses only the current round rather than immediately ending the whole match.

@@ -1,13 +1,13 @@
 export interface WinnerAnimationSettings {
-  /** Whether the short cinematic intro should play before the final result. */
+  /** Legacy intro flag retained for backwards-compatible saved settings; current public winner renderer is static. */
   enabled: boolean;
-  /** Intro duration in seconds. 0 means show the final result immediately. */
+  /** Legacy intro duration. The production winner renderer uses 0 seconds and no intro. */
   durationSeconds: number;
 }
 
 export const DEFAULT_WINNER_ANIMATION_SETTINGS: WinnerAnimationSettings = {
-  enabled: true,
-  durationSeconds: 3,
+  enabled: false,
+  durationSeconds: 0,
 };
 
 const STORAGE_KEY = 'wab-tkd-winner-animation-settings-v1';

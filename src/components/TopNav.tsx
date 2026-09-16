@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Home, Settings, Gavel, Monitor, Users, Trophy, Globe, ShieldAlert, Radio, MapPin, GitBranch, Activity, BarChart3, Menu, ChevronDown, Swords, LayoutDashboard, ListChecks, ClipboardList, Settings2, Save, Palette, Flag } from 'lucide-react';
+import { Home, Settings, Gavel, Monitor, Users, Trophy, Globe, ShieldAlert, Radio, MapPin, GitBranch, Activity, BarChart3, Menu, ChevronDown, Swords, LayoutDashboard, ListChecks, ClipboardList, Settings2, Save, Flag } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useMatch } from '@/context/MatchContext';
 import { getMatControlMode } from '@/lib/mat-status';
@@ -29,7 +29,6 @@ const OTHER_ITEMS = [
   { path: '/tournament-intelligence', label: 'ذكاء البطولة', en: 'Tournament Intelligence', fr: 'Intelligence du tournoi', icon: Activity },
   { path: '/tournament-dashboard', label: 'إحصائيات البطولة', en: 'Tournament Dashboard', fr: 'Tableau de bord du tournoi', icon: BarChart3 },
   { path: '/award-screen', label: 'شاشات الجوائز', en: 'Award Animation Screens', fr: 'Écrans des récompenses', icon: Trophy },
-  { path: '/broadcast-design', label: 'استوديو تصميم البث', en: 'Broadcast Design Studio', fr: 'Studio de design diffusion', icon: Palette },
   { path: '/tournament-wall', label: 'شاشة البطولة', en: 'Tournament Wall', fr: 'Mur du tournoi', icon: Radio },
   { path: '/results-wall', label: 'شاشة النتائج', en: 'Results Wall', fr: 'Mur des résultats', icon: Trophy },
   { path: '/tournament-operations', label: 'عمليات البطولة', en: 'Tournament Operations', fr: 'Opérations du tournoi', icon: LayoutDashboard },

@@ -113,13 +113,16 @@ export function addScore(
   player: PlayerColor,
   type: ScoreType,
   addedBy: ScoreEvent['addedBy'] = 'operator',
-  judgeId?: string
+  judgeId?: string,
+  gamjeomPointsOverride?: number
 ): MatchState {
   // The turning-head button is configurable per match/tournament (5 or 6).
   // All other score types keep the existing SCORE_VALUES mapping.
-  const points = type === 'turning_head'
-    ? (state.config.turningHeadPoints ?? DEFAULT_CONFIG.turningHeadPoints)
-    : SCORE_VALUES[type];
+  const points = type === 'gamjeom'
+    ? Math.max(1, Number(gamjeomPointsOverride ?? SCORE_VALUES[type]))
+    : type === 'turning_head'
+      ? (state.config.turningHeadPoints ?? DEFAULT_CONFIG.turningHeadPoints)
+      : SCORE_VALUES[type];
   const roundIdx = state.currentRound - 1;
   const newState = structuredClone(state);
 
@@ -237,10 +240,12 @@ function checkWinConditions(state: MatchState): MatchState {
   // If PTG already triggered this round, do not re-trigger. Locked until referee confirms.
   if (newState.ptgActive) return newState;
 
-  // Ten Gam-jeoms are a PUN (referee punitive declaration) in current WT rules,
-  // not a point-gap victory. Keep the legacy enforceGamjeomLimit switch for
-  // tournaments that intentionally disable this rule, and keep Par Équipe on
-  // its separate team-competition path.
+  // The final warning slot is a ROUND LOSS in this tournament workflow.
+  // It remains one warning/gam-jeom in the warning field, while the associated
+  // opponent score can be +2 in the final 10 seconds. When the configured
+  // warning limit is reached, award the current round to the opponent and
+  // continue through the normal rest/majority-round flow instead of declaring
+  // the whole match finished immediately.
   const chungRoundGam = chung.scores[roundIdx]?.gamjeom || 0;
   const hongRoundGam = hong.scores[roundIdx]?.gamjeom || 0;
   const chungLimitGam = config.warningResetPerRound === false
@@ -251,15 +256,17 @@ function checkWinConditions(state: MatchState): MatchState {
     : hongRoundGam;
   if (config.competitionMode !== 'par_equipe' && config.enforceGamjeomLimit !== false && (chungLimitGam >= config.gamjeomLimit || hongLimitGam >= config.gamjeomLimit)) {
     const winner: PlayerColor = chungLimitGam >= config.gamjeomLimit ? 'hong' : 'chung';
-    newState.result = {
-      winner,
-      method: 'PUN',
-      finalScore: { chung: chung.totalScore, hong: hong.totalScore },
-    };
-    newState.status = 'finished';
-    newState.finishedAt = Date.now();
-    newState.resultConfirmed = false;
-    return newState;
+    newState.roundWinners = [
+      ...newState.roundWinners.filter(r => r.round !== newState.currentRound),
+      {
+        round: newState.currentRound,
+        winner,
+        method: 'PUN',
+        chungScore: newState.chung.scores[roundIdx]?.total || 0,
+        hongScore: newState.hong.scores[roundIdx]?.total || 0,
+      },
+    ];
+    return finalizeRoundResult(newState);
   }
 
   // Point gap per round. Current 2026 WT updates raised the threshold to 15.
@@ -509,12 +516,21 @@ function finalizeRoundResult(newState: MatchState): MatchState {
     // safe, even for a single-athlete-per-side roster.
     const totalRounds = newState.config.rounds;
     if (totalRounds > 0 && newState.currentRound >= totalRounds) {
-      newState.status = 'finished';
+      // End Round always enters the official inter-round break first, even
+      // after the last configured Par Équipe round. The team result is NOT
+      // revealed during the break: the operator gets the same clean rest
+      // phase on both screens and then explicitly reveals the final team
+      // winner. Keeping status='rest' here also prevents the final round
+      // result panel from colliding with the rest animation.
+      newState.status = 'rest';
+      newState.timeRemaining = newState.config.restTime;
       newState.awaitingTeamReveal = true;
+      newState.awaitingRoundStart = false;
       return newState;
     }
     newState.status = 'rest';
     newState.timeRemaining = newState.config.restTime;
+    newState.awaitingRoundStart = false;
     return newState;
   }
 

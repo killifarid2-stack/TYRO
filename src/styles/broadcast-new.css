@@ -1870,14 +1870,31 @@ body.team-call-fullscreen-active {
 }
 
 .team-name {
-  font-size: clamp(17px, 1.55vw, 32px);
+  font-size: clamp(20px, 1.95vw, 40px);
   font-weight: 700;
 }
+.country {
+  font-size: clamp(13px, 1.15vw, 21px);
+}
+.country .flag-img {
+  width: clamp(34px, 2.8vw, 56px);
+}
+.stat-card {
+  padding: 9px 14px;
+}
 .stat-row {
-  font-size: clamp(11px, 0.95vw, 18px);
+  font-size: clamp(13px, 1.15vw, 22px);
+}
+/* Coach + country are the identity of the team, so the COACH row (the
+   first stat-row) is called out the same way the accent/rank row already
+   is, per the requested redesign. */
+.stat-row:first-child span:last-child {
+  color: var(--team);
+  text-shadow: 0 0 10px var(--team-glow);
+  font-size: 1.2em;
 }
 .crest img {
-  width: clamp(56px, 5.4vw, 104px);
+  width: clamp(68px, 6.6vw, 128px);
 }
 
 /* huge club name banner in the team colour */
@@ -1918,6 +1935,19 @@ body.team-call-fullscreen-active {
 .player-row {
   font-size: clamp(12px, 1.02vw, 20px);
   padding-block: clamp(4px, 0.55vh, 10px);
+}
+/* Roster height now tracks its actual player count instead of always
+   stretching to fill the panel — the team-identity area above (logo,
+   team name, club, coach, country) gets that reclaimed space and grows
+   instead. Each row keeps a sane min/max height rather than the flex-1
+   stretch that used to leave a big empty gap for short rosters. */
+.roster {
+  flex: 0 1 auto;
+}
+.player-row {
+  flex: 0 1 auto;
+  min-height: clamp(30px, 5.4cqh, 46px);
+  max-height: clamp(40px, 8cqh, 68px);
 }
 .player-row .pname {
   gap: 10px;
@@ -3253,3 +3283,104 @@ body.wab-public-display .fixed.inset-0 {
 .public-scoreboard-par-equipe-live .sb-side-hong .sb-round-active {
   transform-origin: center bottom;
 }
+
+
+/* ================================================================
+   WAB-TKD — TEAM CALL / SECOND DISPLAY HARD ISOLATION
+   The real second monitor and the Operator Audience Preview must render one
+   and only one Team Call scene. Never let the normal scoreboard, live-match
+   player cards, yellow pre-match ribbon, or another cinematic occupy the same
+   compositing surface while TEAM_CALL is active.
+   ================================================================ */
+.public-scoreboard-team-call-exclusive,
+.public-scoreboard-team-call-exclusive > [data-wab-layer-root="team-call"],
+.public-scoreboard-team-call-exclusive .team-call-fullscreen-shell {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  isolation: isolate !important;
+}
+.public-scoreboard-team-call-exclusive > [data-wab-layer-root="team-call"] {
+  z-index: 2000 !important;
+  pointer-events: none !important;
+}
+.public-scoreboard-team-call-exclusive .team-call-fullscreen-shell {
+  z-index: 2001 !important;
+}
+
+/* The call composition itself is the complete broadcast canvas. Its centre
+   console is never allowed to be squeezed by an accidental flex/grid child. */
+.team-call-fullscreen-shell .broadcast-animation-fullscreen {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+.team-call-fullscreen-shell .dashboard {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  align-items: stretch !important;
+}
+.team-call-fullscreen-shell .center-match,
+.team-call-fullscreen-shell .team-panel {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Keep WAITING / HEAD REFEREE CONFIRM / READY in the centre console. */
+.team-call-fullscreen-shell .center-match .call-card {
+  position: relative !important;
+  z-index: 20 !important;
+  flex: 0 0 auto !important;
+  max-width: 100% !important;
+}
+.team-call-fullscreen-shell .center-match .rounds {
+  position: relative !important;
+  z-index: 18 !important;
+  flex: 0 0 auto !important;
+}
+
+/* A 16:9 output should use the same composition whether it is the 640px
+   Operator preview (internally 1920x1080) or a physical second monitor. */
+.public-scoreboard-mini .public-scoreboard-team-call-exclusive .team-call-fullscreen-shell {
+  width: 1920px !important;
+  height: 1080px !important;
+}
+
+@media (max-aspect-ratio: 4/3) {
+  .team-call-fullscreen-shell .dashboard {
+    gap: 7px !important;
+  }
+  .team-call-fullscreen-shell .center-match {
+    padding-inline: 6px !important;
+  }
+}
+
+/* 2026-09-16 — Public Display diagnostic guides (off by default). */
+.wab-display-guides{position:absolute;inset:0;z-index:9999;pointer-events:none;font-family:var(--font-display,Inter,sans-serif);color:rgba(255,255,255,.72);text-shadow:0 1px 3px #000;}
+.wab-guide-label{position:absolute;left:50%;top:8px;transform:translateX(-50%);padding:5px 9px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);font-size:10px;font-weight:900;letter-spacing:.16em;}
+.wab-guide-safe{position:absolute;inset:3.5%;border:1px dashed rgba(255,216,102,.7);}
+.wab-guide-center-v{position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed rgba(255,255,255,.35);}.wab-guide-center-h{position:absolute;top:50%;left:0;right:0;border-top:1px dashed rgba(255,255,255,.2);}
+.wab-guide-zone{position:absolute;top:12%;bottom:12%;display:flex;align-items:flex-start;justify-content:center;padding-top:5px;font-size:9px;font-weight:900;letter-spacing:.18em;background:rgba(255,255,255,.015);}.wab-guide-zone.red{left:3.5%;width:29%;border:1px dashed rgba(255,80,90,.65);color:rgba(255,100,110,.9);}.wab-guide-zone.match{left:35.5%;width:29%;border:1px dashed rgba(255,216,102,.55);color:rgba(255,216,102,.85);}.wab-guide-zone.blue{right:3.5%;width:29%;border:1px dashed rgba(70,150,255,.65);color:rgba(90,165,255,.9);}
+
+/* Public Display starts visible only after its 1920×1080 frame has been prepared. */
+body.wab-public-display:not([data-wab-display-ready]) #root{visibility:visible;}
+/* Master 1920×1080 diagnostics/test overlays. They are independent of the
+   animation tree and therefore cannot change animation positions. */
+.wab-display-diagnostics[hidden], .wab-display-test-pattern[hidden] { display:none !important; }
+.wab-display-test-pattern { isolation:isolate; pointer-events:none; }
+.wab-display-test-pattern::after { content:''; position:absolute; inset:5%; border:2px dashed rgba(255,220,90,.75); box-sizing:border-box; }
+.wab-display-test-pattern .c,.wab-display-test-pattern .red,.wab-display-test-pattern .match,.wab-display-test-pattern .blue,.wab-display-test-pattern .safe { position:absolute; z-index:2; font:900 12px/1 'Rajdhani','Cairo',sans-serif; letter-spacing:.16em; }
+.wab-display-test-pattern .tl{left:12px;top:12px}.wab-display-test-pattern .tr{right:12px;top:12px}.wab-display-test-pattern .bl{left:12px;bottom:12px}.wab-display-test-pattern .br{right:12px;bottom:12px}
+.wab-display-test-pattern .red{left:12%;top:50%;color:#ff6772}.wab-display-test-pattern .match{left:50%;top:50%;transform:translate(-50%,-50%);color:#ffe08a}.wab-display-test-pattern .blue{right:12%;top:50%;color:#70adff}.wab-display-test-pattern .safe{left:50%;bottom:6%;transform:translateX(-50%);color:#ffe08a}
