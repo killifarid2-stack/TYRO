@@ -176,8 +176,12 @@ export default function MainRefereeCallPanel({ state, dispatch, modal = false, o
           above, alongside Full Screen and Close Tools. */}
 
       {controlsOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-0 backdrop-blur-xl" onMouseDown={() => setControlsOpen(false)}>
-          <div className="h-full max-h-none w-full max-w-none overflow-y-auto rounded-none border-0 border-t-2 border-[#33a2ff]/40 bg-[radial-gradient(circle_at_15%_0%,rgba(51,162,255,.08),transparent_30%),#06080c] p-4 md:p-6 lg:p-8 shadow-[0_0_100px_rgba(51,162,255,.12)]" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-xl" onMouseDown={() => setControlsOpen(false)}>
+          {/* Centered, sized dialog instead of a full-screen takeover — the
+              controls needed here fit comfortably without covering the
+              whole monitor, and this keeps the buttons reachable without
+              scrolling far. */}
+          <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border-2 border-[#33a2ff]/40 bg-[radial-gradient(circle_at_15%_0%,rgba(51,162,255,.08),transparent_30%),#06080c] p-4 md:p-6 shadow-[0_0_100px_rgba(51,162,255,.12)]" onMouseDown={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
               <div>
                 <div className="font-display text-sm font-black tracking-wide text-[#33a2ff]">PLAYER CALL CONTROLS · استدعاء اللاعبين</div>
@@ -349,8 +353,10 @@ export default function MainRefereeCallPanel({ state, dispatch, modal = false, o
       )}
 
       {isParEquipe && teamControlsOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/92 p-0 backdrop-blur-xl" onMouseDown={() => setTeamControlsOpen(false)}>
-          <div className="h-full max-h-none w-full max-w-none overflow-y-auto rounded-none border-0 border-t-2 border-[#f2c14e]/45 bg-[radial-gradient(circle_at_85%_0%,rgba(242,193,78,.09),transparent_30%),#06080c] p-4 md:p-6 lg:p-8 shadow-[0_0_110px_rgba(242,193,78,.12)]" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/92 p-4 backdrop-blur-xl" onMouseDown={() => setTeamControlsOpen(false)}>
+          {/* Same fix as the Player Call dialog above: a centered, properly
+              sized card instead of a full-screen takeover. */}
+          <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border-2 border-[#f2c14e]/45 bg-[radial-gradient(circle_at_85%_0%,rgba(242,193,78,.09),transparent_30%),#06080c] p-4 md:p-6 shadow-[0_0_110px_rgba(242,193,78,.12)]" onMouseDown={(e) => e.stopPropagation()}>
             {(() => {
               const auto = state.config.teamCallAutoEnabled !== false;
               const stage = state.autoCallSequence?.mode === 'teams' ? state.autoCallSequence.stage : undefined;

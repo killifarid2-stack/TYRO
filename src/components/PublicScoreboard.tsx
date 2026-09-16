@@ -2652,7 +2652,6 @@ function ScoreboardView({ isMiniPreview = false }: { isMiniPreview?: boolean } =
               </div>
             </div>
           )}
-        </div>
 
       </div>
     );

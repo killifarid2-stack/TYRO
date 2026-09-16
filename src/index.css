@@ -4737,79 +4737,73 @@ button[class*="bg-black/"]:hover { border-color: rgba(242,193,78,.48); }
 @media (max-width:900px){
  .girok-decision-frame .girok-decision-gold-arms{inset:-4% -8% !important;width:116% !important;height:108% !important;}
 }
-/* Full-width WOO-SE-GIROK gold hands: preserve the complete left/right hands
-   instead of cropping them at the judge/result frame edges. */
-.girok-public-scene .girok-public-arms{
-  width:min(96%,1400px) !important;
-  max-width:96% !important;
-  max-height:86% !important;
-  bottom:1% !important;
-  object-fit:contain !important;
-  opacity:.92 !important;
-  z-index:2;
-}
-.girok-public-scene .countdown-arms{opacity:.82 !important;}
-
-/* 2026-09-15 WOO-SE-GIROK audience polish: the gold/blue/red artwork is
-   allowed to fill the complete stage so the hand/arm remains visible at both
-   sides of the title/countdown instead of looking like a cropped background. */
+/* 2026-09-16 WOO-SE-GIROK art containment — REWRITTEN.
+   The previous rules here sized the arm artwork with height:100% /
+   max-height:100% while its containing box only had a min-height (never an
+   explicit height). Percentage heights in that situation are invalid per
+   spec and browsers silently ignore them, so the <img> fell back to its
+   natural intrinsic size (scaled from its 100%-wide box) — almost always
+   taller than the visible card — and got hard-clipped by overflow:hidden.
+   That's exactly the "arm still doesn't show fully" cropping the operator
+   kept seeing.
+   Fix: never size these images with a percentage HEIGHT. Use width:auto +
+   height:auto with a percentage max-width (safe — width is always definite)
+   and a PIXEL max-height (also always definite, so it can never be
+   silently dropped). The browser then shrinks the image to satisfy
+   whichever bound is tighter while keeping its aspect ratio — the full
+   artwork is always visible, never stretched, never cropped. */
 .girok-public-scene .girok-public-arms,
 .girok-public-scene .girok-public-arms.countdown-arms{
   left:50% !important;
   bottom:0 !important;
-  width:100% !important;
-  max-width:none !important;
-  height:100% !important;
-  max-height:none !important;
+  top:auto !important;
+  transform:translateX(-50%) !important;
+  width:auto !important;
+  height:auto !important;
+  max-width:92% !important;
+  max-height:340px !important;
   object-fit:contain !important;
-  object-position:center center !important;
+  object-position:center bottom !important;
   opacity:.9 !important;
   filter:drop-shadow(0 0 20px rgba(255,216,102,.5)) drop-shadow(0 0 55px rgba(255,184,45,.24));
 }
 .girok-public-scene .countdown-arms{opacity:.76 !important;}
 .girok-final-decision-panel{
   width:min(96%,1100px);
-  min-height:210px;
+  min-height:260px;
   background:linear-gradient(160deg,rgba(8,12,19,.94),rgba(2,4,8,.97));
-}
-.girok-final-decision-arm{
-  position:absolute !important;
-  left:50% !important;
-  top:50% !important;
-  width:100% !important;
-  height:100% !important;
-  max-width:none !important;
-  max-height:none !important;
-  transform:translate(-50%,-50%) !important;
-  object-fit:contain !important;
-  object-position:center center !important;
-  opacity:.98 !important;
-  z-index:1 !important;
-  pointer-events:none !important;
-  filter:drop-shadow(0 0 18px rgba(255,216,102,.65)) drop-shadow(0 0 42px rgba(255,184,45,.3));
 }
 .girok-final-decision-panel .relative.z-10{
   position:relative;
   z-index:5;
 }
 @media(max-width:900px){
-  .girok-final-decision-panel{width:98%;min-height:185px;}
-  .girok-final-decision-arm{width:100% !important;height:100% !important;}
+  .girok-final-decision-panel{width:98%;min-height:220px;}
 }
 
-/* 2026-09-15 final art containment: the entire arm artwork must remain
-   visible INSIDE its decision frame. No oversized 112/125% artwork and no
-   clipping at the left/right hands. */
+/* Decision-reveal arms (MAJORITY/UNANIMOUS DECISION, both the public
+   broadcast panel and the Main Referee's own compact panel) and the small
+   per-judge corner arms: same auto+px-max-height fix, tuned per box so the
+   full gauntlet is always inside its frame with room to spare for the
+   text/buttons around it. */
 .girok-decision-frame, .girok-public-judge { overflow: hidden; }
 .girok-decision-frame .girok-decision-arm,
-.girok-final-decision-panel .girok-final-decision-arm,
+.girok-final-decision-panel .girok-final-decision-arm{
+  position:absolute !important; left:50% !important; top:50% !important;
+  width:auto !important; height:auto !important;
+  max-width:88% !important; max-height:200px !important;
+  transform:translate(-50%,-50%) !important;
+  object-fit:contain !important; object-position:center center !important;
+  pointer-events:none !important;
+}
+.girok-final-decision-panel .girok-final-decision-arm{ max-height:230px !important; }
 .girok-public-judge .girok-judge-arms-voted,
 .girok-public-judge .girok-judge-arms {
-  left: 50% !important; top: 50% !important;
-  width: 100% !important; height: 100% !important;
-  max-width: 100% !important; max-height: 100% !important;
-  object-fit: contain !important; object-position: center center !important;
-  transform: translate(-50%, -50%) !important;
+  left: 50% !important; top: auto !important; bottom: 1% !important;
+  width: auto !important; height: auto !important;
+  max-width: 74% !important; max-height: 60% !important;
+  object-fit: contain !important; object-position: center bottom !important;
+  transform: translateX(-50%) !important;
 }
 .player-number-under-seed { display:block; margin-top:2px; font-size:8px; letter-spacing:.08em; color:rgba(255,255,255,.55); }
 /* Public scoreboard cinematic glow animations */

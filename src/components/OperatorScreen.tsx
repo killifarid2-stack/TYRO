@@ -359,13 +359,30 @@ export default function OperatorScreen() {
   const previewDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   // Preview window width in px — height always follows at 16:9 so the
   // 1920x1080 public screen scales down cleanly with no letterboxing.
+  // A professional, balanced default (~640x360) and a tight allowed range
+  // (520-800) so the window can never become tiny/unreadable or huge and
+  // intrusive; PREVIEW_MIN/MAX are also used to clamp the resize handle and
+  // any old/out-of-range value saved by a previous build.
+  const PREVIEW_MIN = 520;
+  const PREVIEW_MAX = 800;
+  const PREVIEW_DEFAULT = 640;
   const [previewWidth, setPreviewWidth] = useState<number>(() => {
     try {
       const saved = Number(localStorage.getItem('kyorugi_preview_width'));
-      return saved && saved >= 320 && saved <= 1000 ? saved : 520;
-    } catch { return 520; }
+      return saved && saved >= PREVIEW_MIN && saved <= PREVIEW_MAX ? saved : PREVIEW_DEFAULT;
+    } catch { return PREVIEW_DEFAULT; }
   });
   const previewResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  // On small screens (laptop projecting to a narrow window, etc.) clamp the
+  // width further so the whole window — including its header/tab bar —
+  // always fits fully on screen instead of spilling into a black area.
+  const previewMaxForViewport = () => {
+    if (typeof window === 'undefined') return PREVIEW_MAX;
+    const chromeHeight = 54; // header + tab strip, matches the resize math below
+    const byWidth = window.innerWidth - 32;
+    const byHeight = ((window.innerHeight - 100) - chromeHeight) * 16 / 9;
+    return Math.max(PREVIEW_MIN, Math.min(PREVIEW_MAX, byWidth, byHeight));
+  };
   const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [savedTime, setSavedTime] = useState<number | null>(null);
   const [girokStage, setGirokStage] = useState(0);
@@ -375,6 +392,32 @@ export default function OperatorScreen() {
   const [girokJudges, setGirokJudges] = useState<Record<'left'|'center'|'right', {name:string; photo?:string}>>({ left:{name:'Judge 1'}, center:{name:'Center Referee'}, right:{name:'Judge 3'} });
   const [aiTiebreakerOpen, setAiTiebreakerOpen] = useState(false);
   const [manualAiAnalysis, setManualAiAnalysis] = useState<ReturnType<typeof analyzeTiebreaker> | null>(null);
+  // If the browser/monitor is resized smaller than the saved preview
+  // position/size, shrink and re-position the floating preview so it always
+  // stays fully on-screen instead of hanging off the edge or under other
+  // panels. Runs once on mount too, so an old, out-of-range saved size from
+  // a previous build is corrected immediately rather than only on the next
+  // manual resize.
+  useEffect(() => {
+    const clamp = () => {
+      setPreviewWidth(w => {
+        const cap = previewMaxForViewport();
+        return w > cap ? cap : w < PREVIEW_MIN ? PREVIEW_MIN : w;
+      });
+      setPreviewPos(pos => {
+        if (!pos) return pos;
+        const w = previewWidth;
+        const h = w * 9 / 16 + 54;
+        const x = Math.max(0, Math.min(Math.max(0, window.innerWidth - w), pos.x));
+        const y = Math.max(0, Math.min(Math.max(0, window.innerHeight - h), pos.y));
+        return (x === pos.x && y === pos.y) ? pos : { x, y };
+      });
+    };
+    clamp();
+    window.addEventListener('resize', clamp);
+    return () => window.removeEventListener('resize', clamp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!mainRefereeFullScreen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1944,7 +1987,14 @@ export default function OperatorScreen() {
 
 {state.pendingRoundDecision && <><button disabled={state.config.roundTieWooSeGirokEnabled === false} onClick={openGirokSummons} className="px-9 py-4 rounded-xl bg-[hsl(var(--gold))] text-[#050505] font-display font-black border-2 border-[hsl(var(--gold))] shadow-[0_0_30px_hsl(var(--gold)/.55)] hover:brightness-110 disabled:opacity-30">⚖ WOO-SE-GIROK — 우세기록</button><button onClick={() => { sounds.winner(); dispatch({type:'RESOLVE_DRAW_ROUND',winner:'chung',decisionType:'WOOSE_GIROK',votes:state.roundTieReview?.votes}); setGirokOpen(false); }} className="px-7 py-3 rounded-xl border-2 border-[hsl(var(--chung))] bg-[hsl(var(--chung))]/15 text-[hsl(var(--chung))] font-display font-black">BLUE — ROUND WINNER</button><button onClick={() => { sounds.winner(); dispatch({type:'RESOLVE_DRAW_ROUND',winner:'hong',decisionType:'WOOSE_GIROK',votes:state.roundTieReview?.votes}); setGirokOpen(false); }} className="px-7 py-3 rounded-xl border-2 border-[hsl(var(--hong))] bg-[hsl(var(--hong))]/15 text-[hsl(var(--hong))] font-display font-black">RED — ROUND WINNER</button></>}
 </div></div></>}
-              {girokOpen && <div className="relative mt-2 min-h-[560px] overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_50%,rgba(255,190,30,.12),transparent_34%),linear-gradient(180deg,#090d14_0%,#030509_100%)] p-6"><div className="absolute inset-0 pointer-events-none"><div className="girok-sweep girok-sweep-one"/><div className="girok-sweep girok-sweep-two"/><div className="girok-particle p1"/><div className="girok-particle p2"/><div className="girok-particle p3"/></div><img src={wooseGirokArms} alt="WOO-SE-GIROK referee arms" className="absolute left-1/2 bottom-[-2%] -translate-x-1/2 w-[96%] max-w-[1500px] h-auto select-none pointer-events-none girok-arms-image"/><div className="relative z-10 text-center girok-center-content"><div className="text-[hsl(var(--gold))] text-[11px] font-black tracking-[.5em]">우세기록</div><div className="girok-gold-title font-display text-4xl md:text-5xl girok-title-between-arms">WOO-SE-GIROK</div>{girokStage===0 && <button onClick={startGirokCountdown} className="mt-12 px-8 py-4 rounded-xl bg-white text-black font-display font-black">START COUNTDOWN</button>}{girokCounting && girokStage>=1 && girokStage<=3 && <div key={girokStage} className="mt-12"><div className="girok-count-number">{girokStage}</div><div className="girok-count-name">{[['',''],['1','HANA — 하나'],['2','DUL — 둘'],['3','SET — 셋']][girokStage][1]}</div></div>}{!girokCounting && girokStage===4 && <><div className="mt-8 text-xs tracking-[.3em] text-[hsl(var(--gold))] font-black">THREE REFEREES</div><div className="grid grid-cols-3 gap-3 mt-5"><JudgeCard id="left" role="SIDE JUDGE"/><JudgeCard id="center" role="CENTER / MAT REFEREE"/><JudgeCard id="right" role="SIDE JUDGE"/></div>{allVoted && <div className={`mt-5 girok-decision-frame relative overflow-hidden p-5 text-center ${majority==='chung'?'is-chung':'is-hong'}`}><img src={majority==='chung'?wooseGirokArmBlue:wooseGirokArmRed} alt="" className="girok-decision-arm"/><div className="relative z-10"><div className="girok-gold-title font-display text-lg md:text-xl">MAJORITY DECISION</div><div className={`mt-3 text-4xl md:text-5xl font-display font-black ${majority==='chung'?'text-[hsl(var(--chung))]':'text-[hsl(var(--hong))]'}`}>{majority==='chung'?'BLUE':'RED'} WINS</div><div className="mt-1 text-2xl font-display font-black text-white/80">{blueVotes} — {redVotes}</div><button onClick={() => { sounds.winner(); dispatch({type:'RESOLVE_DRAW_ROUND',winner:majority!,decisionType:'WOOSE_GIROK',votes}); }} className="mt-5 px-8 py-3 rounded-xl bg-[hsl(var(--gold))] text-black font-display font-black shadow-[0_0_30px_hsl(var(--gold)/.35)]">CENTER REFEREE CONFIRM FINAL DECISION</button></div></div>}</>}</div></div>}
+              {/* Compact by request: this used to be min-h-[560px] with the
+                  arm sized w-[96%]/h-auto, which (at typical dialog widths)
+                  rendered the artwork taller than the box and pushed
+                  START COUNTDOWN far down the page. Shrunk to a ~380px
+                  stage and the arm is now capped by a pixel max-height
+                  (never a bare percentage) so it always shows completely
+                  without forcing the box to grow. */}
+              {girokOpen && <div className="relative mt-2 min-h-[380px] overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_50%,rgba(255,190,30,.12),transparent_34%),linear-gradient(180deg,#090d14_0%,#030509_100%)] p-5"><div className="absolute inset-0 pointer-events-none"><div className="girok-sweep girok-sweep-one"/><div className="girok-sweep girok-sweep-two"/><div className="girok-particle p1"/><div className="girok-particle p2"/><div className="girok-particle p3"/></div><img src={wooseGirokArms} alt="WOO-SE-GIROK referee arms" className="absolute left-1/2 bottom-0 -translate-x-1/2 w-auto h-auto max-w-[90%] max-h-[220px] select-none pointer-events-none girok-arms-image"/><div className="relative z-10 text-center girok-center-content"><div className="text-[hsl(var(--gold))] text-[11px] font-black tracking-[.5em]">우세기록</div><div className="girok-gold-title font-display text-4xl md:text-5xl girok-title-between-arms">WOO-SE-GIROK</div>{girokStage===0 && <button onClick={startGirokCountdown} className="mt-6 px-8 py-4 rounded-xl bg-white text-black font-display font-black">START COUNTDOWN</button>}{girokCounting && girokStage>=1 && girokStage<=3 && <div key={girokStage} className="mt-6"><div className="girok-count-number">{girokStage}</div><div className="girok-count-name">{[['',''],['1','HANA — 하나'],['2','DUL — 둘'],['3','SET — 셋']][girokStage][1]}</div></div>}{!girokCounting && girokStage===4 && <><div className="mt-6 text-xs tracking-[.3em] text-[hsl(var(--gold))] font-black">THREE REFEREES</div><div className="grid grid-cols-3 gap-3 mt-4"><JudgeCard id="left" role="SIDE JUDGE"/><JudgeCard id="center" role="CENTER / MAT REFEREE"/><JudgeCard id="right" role="SIDE JUDGE"/></div>{allVoted && <div className={`mt-4 girok-decision-frame relative overflow-hidden p-5 text-center ${majority==='chung'?'is-chung':'is-hong'}`}><img src={majority==='chung'?wooseGirokArmBlue:wooseGirokArmRed} alt="" className="girok-decision-arm"/><div className="relative z-10"><div className="girok-gold-title font-display text-lg md:text-xl">MAJORITY DECISION</div><div className={`mt-3 text-4xl md:text-5xl font-display font-black ${majority==='chung'?'text-[hsl(var(--chung))]':'text-[hsl(var(--hong))]'}`}>{majority==='chung'?'BLUE':'RED'} WINS</div><div className="mt-1 text-2xl font-display font-black text-white/80">{blueVotes} — {redVotes}</div><button onClick={() => { sounds.winner(); dispatch({type:'RESOLVE_DRAW_ROUND',winner:majority!,decisionType:'WOOSE_GIROK',votes}); }} className="mt-5 px-8 py-3 rounded-xl bg-[hsl(var(--gold))] text-black font-display font-black shadow-[0_0_30px_hsl(var(--gold)/.35)]">CENTER REFEREE CONFIRM FINAL DECISION</button></div></div>}</>}</div></div>}
             </div></div></div>;
         })()}
 
@@ -3268,7 +3318,10 @@ export default function OperatorScreen() {
           className="wab-referee-floating-preview fixed z-[10000] rounded-xl overflow-hidden shadow-2xl border-2 border-[hsl(var(--info))]/60 bg-black"
           style={previewPos
             ? { width: previewWidth, left: previewPos.x, top: previewPos.y }
-            : { width: previewWidth, left: Math.max(16, window.innerWidth - previewWidth - 24), top: Math.max(80, Math.round((window.innerHeight - previewWidth * 9 / 16) / 2)) }}
+            // First-ever open: land inside the normal working area of the
+            // screen (never the dark strip at the very bottom), roughly
+            // centered vertically and inset from the right edge.
+            : { width: previewWidth, left: Math.max(16, window.innerWidth - previewWidth - 24), top: Math.max(90, Math.round((window.innerHeight - (previewWidth * 9 / 16 + 54)) / 2)) }}
         >
           <div
             onMouseDown={(e) => {
@@ -3324,7 +3377,8 @@ export default function OperatorScreen() {
               const onMove = (ev: MouseEvent) => {
                 if (!previewResizeRef.current) return;
                 const { startX, startWidth } = previewResizeRef.current;
-                const next = Math.max(320, Math.min(1600, startWidth + (ev.clientX - startX)));
+                const cap = Math.min(PREVIEW_MAX, previewMaxForViewport());
+                const next = Math.max(PREVIEW_MIN, Math.min(cap, startWidth + (ev.clientX - startX)));
                 setPreviewWidth(next);
               };
               const onUp = () => {
